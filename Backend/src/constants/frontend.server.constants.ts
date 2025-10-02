@@ -21,3 +21,4 @@ export const CYPHER_COMMAND = "cypher";
 export const INDEGREE_COMMAND = "idd";
 export const OUTDEGREE_COMMAND = "odd";
 export const PROPERTIES_COMMAND = "prp";
+export const UPLOAD_FROM_HDFS = "adhdfs";

@@ -12,14 +12,14 @@ limitations under the License.
  */
 
 import { Router } from 'express';
-import { getGraphList, uploadGraph, removeGraph, triangleCount, getGraphVisualization, getGraphData, getClusterProperties } from '../controllers/graph.controller';
+import { getGraphList, uploadGraph, removeGraph, triangleCount, getGraphVisualization, getGraphData, getClusterProperties, getDataFromHadoop } from '../controllers/graph.controller';
 import multer from 'multer';
 import path from 'path';
 
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'app/caches/'); // Specify the folder to save files
+    cb(null, '/home/kopimenan/FYP_Fork/jasminegraph/env/data'); // Specify the folder to save files
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname)); // Save file with a unique name
@@ -29,6 +29,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 const graphRoute = () => {
+  // console.log('Called');
   const router = Router();
 
   router.get('/list', getGraphList);
@@ -38,6 +39,7 @@ const graphRoute = () => {
   router.get('/visualize', getGraphVisualization);
   router.get('/data', getGraphData)
   router.get('/info', getClusterProperties);
+  router.get('/hadoop', getDataFromHadoop);
 
   return router;
 };

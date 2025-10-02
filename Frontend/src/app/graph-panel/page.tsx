@@ -67,21 +67,24 @@ export default function GraphUpload() {
       toast.error("Please select a file to upload");
       return;
     }
-
-      const formData = new FormData();
+      // console.log(localStorage.getItem('selectedCluster'));
+    // console.log('hittt');
+    const formData = new FormData();
       formData.append('file', file);    
       formData.append('graphName', graphName); // Append the file name
 
       // Send the file and filename with Axios POST request
       axios.post('/backend/graph/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'multipart/form-data',
+          'Cluster-ID': localStorage.getItem('selectedCluster')
         }
       })
       .then(response => {
         message.success("File uploaded successfully");
       })
       .catch(error => {
+        // console.log('error');
         message.error("Failed to upload file");
       });
 
