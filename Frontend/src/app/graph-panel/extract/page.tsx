@@ -77,6 +77,8 @@ export default function GraphUpload() {
     const [clientId, setClientID] = useState<string>('');
     const [showMeta, setShowMeta] = useState<string>("");
     const [pausedGraphs, setPausedGraphs] = useState<Record<string, boolean>>({});
+    const [textFileName, setTextFileName] = useState<string>("");
+
 
 
     const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(WS_URL, { share: true, shouldReconnect: (closeEvent) => true });
@@ -108,10 +110,10 @@ export default function GraphUpload() {
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('graphName', graphName);
+        formData.append('textFileName', textFileName);
 
         try {
-            await axios.post('/backend/graph/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await axios.post('/backend/graph/file-upload', formData, { headers: { 'Content-Type': 'multipart/form-data', 'Cluster-ID': localStorage.getItem('selectedCluster') } });
             message.success("File uploaded successfully");
         } catch (error) {
             message.error("Failed to upload file");
@@ -210,15 +212,22 @@ export default function GraphUpload() {
                     <Typography.Title level={4} style={{ margin: "20px 0px" }}>
                         Extract Graph Data:
                     </Typography.Title>
-                    <Dragger multiple={false} maxCount={1} beforeUpload={(file: RcFile) => handleFileUpload(file)}>
+                    <Dragger multiple={false} maxCount={1} accept=".pdf,.txt" beforeUpload={(file: RcFile) => {
+                        const allowedTypes = ["application/pdf", "text/plain"];
+                        const ext = file.name.split(".").pop()?.toLowerCase();
+
+                        if (!allowedTypes.includes(file.type) && !["pdf", "txt"].includes(ext || "")) {
+                            message.error("Only PDF and TXT files are allowed!");
+                            return Upload.LIST_IGNORE;}
+                        handleFileUpload(file)}}>
                         <p className="ant-upload-drag-icon"><InboxOutlined /></p>
                         <p className="ant-upload-text">Click or drag file to this area to upload</p>
                     </Dragger>
 
                     <Modal title="Extract Graph" centered open={modalOpen} onOk={() => setModalOpen(false)} onCancel={() => setModalOpen(false)} footer={null}>
                         <div className="flex whitespace-nowrap gap-4 mt-5">
-                            <div>Graph Name:</div>
-                            <Input value={graphName} onChange={(event) => setGraphName(event.currentTarget.value)} />
+                            <div>Text file Name:</div>
+                            <Input value={textFileName} onChange={(event) => setTextFileName(event.currentTarget.value)} />
                         </div>
                         <Button type="primary" style={{ margin: "20px 0px", width: "100%" }} onClick={handleUpload}>
                             Upload

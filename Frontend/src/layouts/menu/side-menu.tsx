@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Layout, Menu, theme } from "antd";
 import { getSideMenuData } from "@/data/side-menu-data";
 import { usePathname, useRouter } from "next/navigation";
@@ -27,6 +27,14 @@ const SideMenu = () => {
   const pathname = usePathname();
   const { userData } = useAppSelector(state => state.authData);
   const sideMenuData = getSideMenuData(useRouter(), userData.role);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const path = pathname.split("/")[1];
+    // Auto-collapse the menu when viewing the performance page to avoid two sidebars
+    if (path === "performance") setCollapsed(true);
+    else setCollapsed(false);
+  }, [pathname]);
   
   const findActiveMenu = () => {
     const path = pathname.split("/")[1];
@@ -34,7 +42,14 @@ const SideMenu = () => {
   }
 
   return (
-    <Sider width={200} style={{ background: colorBgContainer }}>
+    <Sider
+      width={200}
+      collapsible
+      collapsed={collapsed}
+      onCollapse={(value) => setCollapsed(value)}
+      collapsedWidth={48}
+      style={{ background: colorBgContainer }}
+    >
       <Menu
         mode="inline"
         defaultSelectedKeys={[Routes.SIDE_MENU_ROUTES.home]}

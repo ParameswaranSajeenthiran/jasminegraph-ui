@@ -78,7 +78,6 @@ export const getSideMenuData = (router: AppRouterInstance, role: string) => {
         onClick: () => {
           onMenuClick(Routes.SIDE_MENU_ROUTES.performance);
         },
-        disabled: true,
       },
       {
         key: Routes.SIDE_MENU_ROUTES.queryExecution,
@@ -185,7 +184,8 @@ export const getSideMenuData = (router: AppRouterInstance, role: string) => {
       onClick: () => {
         onMenuClick(Routes.SIDE_MENU_ROUTES.performance);
       },
-      disabled: true,
+      // enabled for non-admins as well (access control should be enforced server-side)
+      disabled: false,
     },
     {
       key: Routes.SIDE_MENU_ROUTES.queryExecution,

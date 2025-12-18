@@ -22,6 +22,7 @@ import { useAppSelector } from "@/redux/hook";
 import { useDispatch } from "react-redux";
 import { set_Selected_Cluster } from "@/redux/features/clusterData";
 import { getCluster, getClusterProperties } from "@/services/cluster-service";
+import useAccessToken from '@/hooks/useAccessToken';
 
 interface DataType {
   key: string;
@@ -79,6 +80,7 @@ export default function ClusterDetails({ params }: { params: { id: string } }) {
   const { selectedCluster } = useAppSelector(state => state.clusterData)
   const [clusterDetails, setClusterDetails] = useState<IClusterDetails | null>(selectedCluster);
   const [clusterProperties, setClusterProperties] = useState<IClusterProperties | null>(null);
+  const { getSrvAccessToken } = useAccessToken();
 
   const items: DescriptionsProps['items'] = [
     {
@@ -114,7 +116,8 @@ export default function ClusterDetails({ params }: { params: { id: string } }) {
 
   const fetchClusterDetails = async () => {
     try{
-      const res = await getCluster(params.id);
+      const token = getSrvAccessToken() || "";
+      const res = await getCluster(params.id, token);
       if(res.data){
         setClusterDetails(res.data)
       }

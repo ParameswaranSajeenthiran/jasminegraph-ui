@@ -23,6 +23,7 @@ import { addUserToCluster, getCluster, removeUserFromCluster } from "@/services/
 import { set_Selected_Cluster } from "@/redux/features/clusterData";
 import { getAllUsers } from "@/services/user-service";
 import { set_Users_Cache } from "@/redux/features/cacheSlice";
+import useAccessToken from '@/hooks/useAccessToken';
 
 interface DataType {
   key: string;
@@ -49,6 +50,7 @@ export default function AccessManagement({ params }: { params: { id: string } })
   const [clusterDetails, setClusterDetails] = useState<IClusterDetails | null>(selectedCluster);
   const [userData, setUserData] = useState<IUserAccessData[]>(users);
   const [clusterUsers, setClusterUsers] = useState<IUserAccessData[]>([]);
+  const { getSrvAccessToken } = useAccessToken();
 
   const columns: TableProps<DataType>['columns'] = [
     {
@@ -113,8 +115,9 @@ export default function AccessManagement({ params }: { params: { id: string } })
   const handleUserAdd = async (userID: string) => {
     const user = userData.find((user) => user.id == userID)
     setClusterUsers([...clusterUsers, user!])
+    const token = getSrvAccessToken() || "";
     try{
-      const res = await addUserToCluster(userID, String(clusterDetails!.id));
+      const res = await addUserToCluster(userID, String(clusterDetails!.id), token);
       if(res.data){
         console.log("User added successfully")
       }
@@ -124,9 +127,10 @@ export default function AccessManagement({ params }: { params: { id: string } })
   }
 
   const handleUserRemove = async (userID: string) => {
+    const token = getSrvAccessToken() || "";
     setClusterUsers(clusterUsers.filter((user) => user.id !== userID))
     try{
-      const res = await removeUserFromCluster(userID, String(clusterDetails!.id));
+      const res = await removeUserFromCluster(userID, String(clusterDetails!.id), token);
       if(res.data){
         console.log("User removed successfully (id: ", userID, ")")
       }
@@ -166,7 +170,8 @@ export default function AccessManagement({ params }: { params: { id: string } })
 
   const fetchClusterDetails = async () => {
     try{
-      const res = await getCluster(params.id);
+      const token = getSrvAccessToken() || "";
+      const res = await getCluster(params.id, token);
       if(res.data){
         setClusterDetails(res.data)
       }

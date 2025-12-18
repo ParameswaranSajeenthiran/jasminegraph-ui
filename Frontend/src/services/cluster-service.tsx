@@ -30,7 +30,6 @@ export async function addNewCluster(name: string, description: string, host: str
       method: "post",
       url: "/backend/clusters",
       headers: {
-        "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
       },
       data: {
@@ -61,7 +60,6 @@ export async function getAllClusters(token: string) {
       method: "get",
       url: `/backend/clusters/myClusters`,
       headers: {
-        "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
       },
     }).then((res) => res.data);
@@ -73,11 +71,14 @@ export async function getAllClusters(token: string) {
   }
 }
 
-export async function getCluster(clusterID: string) {
+export async function getCluster(clusterID: string, token: string) {
   try {
     const result = await authApi({
       method: "get",
       url: `/backend/clusters/${clusterID}`,
+       headers: {
+        "Authorization": `Bearer ${token}`,
+      },
     }).then((res) => res.data);
     return {
       data: result.data,
@@ -103,11 +104,14 @@ export async function getClustersStatusByIds(token: string, ids: number[]) {
   }
 }
 
-export async function addUserToCluster(userID: string, clusterID: string){
+export async function addUserToCluster(userID: string, clusterID: string, token: string){
   try {
     const result = await authApi({
       method: "post",
       url: `/backend/clusters/addUser`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       data: {
         userID, 
         clusterID,
@@ -121,11 +125,14 @@ export async function addUserToCluster(userID: string, clusterID: string){
   }
 }
 
-export async function removeUserFromCluster(userID: string, clusterID: string){
+export async function removeUserFromCluster(userID: string, clusterID: string, token: string){
   try {
     const result = await authApi({
       method: "post",
       url: `/backend/clusters/removeUser`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       data: {
         userID, 
         clusterID,
