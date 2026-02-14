@@ -16,7 +16,7 @@ import {
     getGraphList, uploadGraph, removeGraph, triangleCount, getGraphVisualization, getGraphData, getClusterProperties,
     getDataFromHadoop, constructKG, stopConstructKG,
     updateKGConstructionMetaByClusterId, getKGConstructionMetaByGraphId, getOnProgressKGConstructionMeta, validateHDFS,
-    constructKGTXT
+    constructKGTXT, graphRAGQuery
 } from '../controllers/graph.controller';
 import multer from 'multer';
 import path from 'path';
@@ -71,6 +71,7 @@ const graphRoute = () => {
     router.get('/construct-kg-meta/progress', getOnProgressKGConstructionMeta);
     router.put('/construct-kg-meta', updateKGConstructionMetaByClusterId);
 
+    router.post('/rag', graphRAGQuery);
   return router;
 };
 

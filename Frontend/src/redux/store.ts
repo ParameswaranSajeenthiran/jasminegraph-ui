@@ -18,6 +18,7 @@ import authDataSlice from "./features/authData";
 import clusterDataSlice from "./features/clusterData";
 import cacheDataSlice from "./features/cacheSlice";
 import queryDataSlice from "./features/queryData";
+import graphRagDataSlice from "./features/graphRagData";
 
 export const store = configureStore({
   reducer: {
@@ -26,6 +27,8 @@ export const store = configureStore({
     clusterData: clusterDataSlice,
     cacheData: cacheDataSlice,
     queryData: queryDataSlice,
+    graphRagData: graphRagDataSlice,
+
   },
 });
 

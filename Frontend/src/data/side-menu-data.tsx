@@ -24,7 +24,8 @@ import {
   SettingOutlined,
   CodeOutlined,
   UsergroupAddOutlined,
-  SlidersOutlined
+  SlidersOutlined,
+  RobotOutlined
 } from "@ant-design/icons";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as Routes from "@/routes/page-routes";
@@ -69,6 +70,13 @@ export const getSideMenuData = (router: AppRouterInstance, role: string) => {
         label: "Query Interface",
         onClick: () => {
           onMenuClick(Routes.SIDE_MENU_ROUTES.queryInterface);
+        },
+      },  {
+        key: Routes.SIDE_MENU_ROUTES.rag,
+        icon: <RobotOutlined />,
+        label: "Agent",
+        onClick: () => {
+          onMenuClick(Routes.SIDE_MENU_ROUTES.rag);
         },
       },
       {

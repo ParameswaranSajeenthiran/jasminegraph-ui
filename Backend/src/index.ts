@@ -39,7 +39,7 @@ const app = express();
 
 // Create an HTTP server
 const server = http.createServer(app);
-
+server.timeout = 10 * 60 * 1000; // 10 minutes
 setupWebSocket(server);
 
 const CACHE_DIR = path.resolve("/app/caches");

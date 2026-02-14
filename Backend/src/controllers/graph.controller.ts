@@ -22,8 +22,8 @@ import {
     TRIANGLE_COUNT_COMMAND,
     PROPERTIES_COMMAND,
     STOP_CONSTRUCT_KG_COMMAND,
-    CONSTRUCT_KG_COMMAND, CONSTRUCT_KG_COMMAND_LOCAL
-} from './../constants/frontend.server.constants';
+    CONSTRUCT_KG_COMMAND, CONSTRUCT_KG_COMMAND_LOCAL, GRAPHRAG_QUERY_COMMAND
+} from '../constants/frontend.server.constants';
 import { ErrorCode, ErrorMsg } from '../constants/error.constants';
 import { getClusterByIdRepo } from '../repository/cluster.repository';
 import { HTTP, TIMEOUT } from '../constants/constants';
@@ -35,7 +35,7 @@ import {
     deleteKGConstructionMetaRepo,
     KGStatus
 
-} from "../repository/kg-construction-meta.respository";
+} from "../repository/kg-construction-meta.repository";
 import fs from "fs";
 import path from "path";
 
@@ -325,6 +325,245 @@ export const constructKG = async (req: Request, res: Response) => {
     }
 };
 
+export const graphRAGQuery = async (req: Request, res: Response) => {
+    const connection = await getClusterDetails(req);
+    if (!(connection.host && connection.port)) {
+        return res.status(404).send(connection);
+    }
+
+    const {
+        graphId,
+        query,
+        llmRunnerString,
+        inferenceEngine,
+        model
+    } = req.body;
+
+    try {
+
+        await new Promise<void>((resolve, reject) => {
+            telnetConnection({ host: connection.host, port: connection.port })(() => {
+                const timeout = setTimeout(() => {
+                    if (!answered) {
+                        console.error(" GraphRAG timed out");
+                        res.status(504).send({ error: "GraphRAG timeout" });
+                        tSocket.end();
+                        resolve();           // unblock Express
+                    }
+                }, 120000); // 2 minutes
+                let answered = false;
+
+                tSocket.on("data", (buffer) => {
+                    const msg = buffer.toString("utf8").trim();
+                    console.log("GraphRAG:", msg);
+
+                    /* 1. Graph ID */
+                    if (msg.includes("Graph ID")) {
+                        tSocket.write(graphId.toString().trim() + "\n");
+                    }
+
+                    /* 2. NL query */
+                    else if (msg.includes("Input natural language query:")) {
+                        tSocket.write(query.trim() + "\n");
+                    }
+
+                    /* 3. LLM runner */
+                    else if (msg.includes("LLM runner hostname:port:")) {
+                        tSocket.write(llmRunnerString.trim() + "\n");
+                    }
+
+                    /* 4. Inference engine */
+                    else if (msg.includes("LLM inference engine? ollama/vllm?")) {
+                        tSocket.write(inferenceEngine.trim() + "\n");
+                    }
+
+                    /* 5. Model */
+                    else if (msg.includes("What is the LLM you want to use")) {
+                        tSocket.write(model.toString().trim() + "\n");
+                        // setTimeout(resolve, TIMEOUT.default)
+                    }
+
+                    /* 6. Model missing → auto fallback */
+                    else if (msg.includes("not available on ollama server")) {
+                        console.warn("⚠️ Model missing, falling back to llama3");
+                        tSocket.write("llama3\n");
+                    }
+
+                    /* 7. Final answer */
+                    else if (
+                        msg.startsWith("ANSWER") ||
+                        msg.startsWith("Result") ||
+                        msg.includes("GraphRAG response")
+                    ) {
+                        answered = true;
+                        tSocket.write("exit\n");
+
+                        // Extract clean answer (optional cleanup)
+                        const cleanAnswer = msg.replace(/^ANSWER[:\s-]*/i, "").trim();
+
+                        // Dummy objectives data
+                        const dummyObjectives = [
+                            {
+                                id: "objA1",
+                                query: "Which director of the 1995 film Silent Horizon won a Golden Globe Award?",
+                                search_type: "SEMANTIC_BEAM_SEARCH",
+                                llm_reasoning: {
+                                    summarizedPathObj : {
+                                        pathNodes: [
+                                            { id: "622", label: "Person", name: "Laura Bennett", partitionID: "4" },
+                                            { id: "620", label: "Book", name: "Crimson Echo", partitionID: "4" }
+                                        ],
+                                        pathRels: [
+                                            { direction: "right", id: "9011", type: "WROTE" }
+                                        ]
+                                    }
+                                },
+                                results: [
+                                    {
+                                        hop: 2,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "201", label: "Person", name: "Emily Carter", partitionID: "2" },
+                                                { id: "305", label: "Movie", name: "Silent Horizon", partitionID: "2" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "right", id: "9001", type: "DIRECTED" }
+                                            ]
+                                        },
+                                        score: 0.91
+                                    },
+                                    {
+                                        hop: 3,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "201", label: "Person", name: "Emily Carter", partitionID: "2" },
+                                                { id: "410", label: "Award", name: "Golden Globe Award", partitionID: "3" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "right", id: "9002", type: "WON_AWARD" }
+                                            ]
+                                        },
+                                        score: 0.87
+                                    },
+                                    {
+                                        hop: 1,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "512", label: "Person", name: "Michael Reeves", partitionID: "2" },
+                                                { id: "305", label: "Movie", name: "Silent Horizon", partitionID: "2" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "right", id: "9003", type: "ACTED_IN" }
+                                            ]
+                                        },
+                                        score: 0.74
+                                    }
+                                ]
+                            },
+                            {
+                                id: "objB2",
+                                query: "In which year was the novel Crimson Echo published?",
+                                search_type: "SEMANTIC_BEAM_SEARCH",
+                                results: [
+                                    {
+                                        hop: 1,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "620", label: "Book", name: "Crimson Echo", partitionID: "4" },
+                                                { id: "621", label: "Year", name: "2003", partitionID: "4" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "right", id: "9010", type: "PUBLISHED_IN" }
+                                            ]
+                                        },
+                                        score: 0.95
+                                    },
+                                    {
+                                        hop: 2,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "622", label: "Person", name: "Laura Bennett", partitionID: "4" },
+                                                { id: "620", label: "Book", name: "Crimson Echo", partitionID: "4" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "right", id: "9011", type: "WROTE" }
+                                            ]
+                                        },
+                                        score: 0.81
+                                    }
+                                ]
+                            },
+                            {
+                                id: "objC3",
+                                query: "Which university did the CEO of TechNova Inc. graduate from?",
+                                search_type: "SEMANTIC_BEAM_SEARCH",
+                                results: [
+                                    {
+                                        hop: 2,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "730", label: "Person", name: "Daniel Kim", partitionID: "5" },
+                                                { id: "731", label: "Organization", name: "TechNova Inc.", partitionID: "5" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "left", id: "9020", type: "CEO_OF" }
+                                            ]
+                                        },
+                                        score: 0.88
+                                    },
+                                    {
+                                        hop: 3,
+                                        pathObj: {
+                                            pathNodes: [
+                                                { id: "730", label: "Person", name: "Daniel Kim", partitionID: "5" },
+                                                { id: "732", label: "University", name: "Stanford University", partitionID: "6" }
+                                            ],
+                                            pathRels: [
+                                                { direction: "right", id: "9021", type: "GRADUATED_FROM" }
+                                            ]
+                                        },
+                                        score: 0.93
+                                    }
+                                ]
+                            }
+                        ];
+
+
+                        res.status(200).send({
+                            answer: cleanAnswer || "Annentee bronthe",
+                            plan_type: "DECOMPOSED",
+                            objectives: dummyObjectives
+                        });
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                    /* 8. Fatal errors */
+                    else if (
+                        msg.includes("Could not connect") ||
+                        msg.includes("Socket") ||
+                        msg.includes("ERROR")
+                    ) {
+                        tSocket.write("exit\n");
+                        resolve();
+                        res.status(400).send({ error: msg });
+                    }
+
+                });
+
+                /* Kick off */
+                tSocket.write(GRAPHRAG_QUERY_COMMAND + "\n");
+            });
+        });
+
+    } catch (err) {
+        console.error("❌ GraphRAG failed:", err);
+        return res.status(500).send({
+            code: ErrorCode.ServerError,
+            message: ErrorMsg.ServerError,
+            errorDetails: err
+        });
+    }
+};
 
 export const constructKGTXT = async (req: Request, res: Response) => {
     const connection = await getClusterDetails(req);

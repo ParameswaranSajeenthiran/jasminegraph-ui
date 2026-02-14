@@ -33,6 +33,7 @@ const SideMenu = () => {
     const path = pathname.split("/")[1];
     // Auto-collapse the menu when viewing the performance page to avoid two sidebars
     if (path === "performance") setCollapsed(true);
+    if(path === "rag") setCollapsed(true);
     else setCollapsed(false);
   }, [pathname]);
   

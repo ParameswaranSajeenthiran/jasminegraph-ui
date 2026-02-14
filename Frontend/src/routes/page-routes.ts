@@ -24,6 +24,7 @@ export const SIDE_MENU_ROUTES = {
   guides: "/guides",
   settings: "/settings",
   about: "/about",
+  rag: "/rag"
 };
 
 export const CLUSTER_PAGE_ROUTES = {

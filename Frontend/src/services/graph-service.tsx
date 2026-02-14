@@ -129,6 +129,56 @@ export async function constructKG(
         };
     }
 }
+export async function queryGraphRAG(
+    graphId: string,
+    query: string,
+    llmRunnerString: string | null,
+    inferenceEngine: string | null,
+    model: string | null
+): Promise<{ status: number; message: string; data: any }> {
+    try {
+        const result = await authApi({
+            method: "post",
+            url: `/backend/graph/rag`,
+            headers: {
+                "Cluster-ID": localStorage.getItem("selectedCluster"),
+            },
+            data: {
+                graphId,
+                query,
+                llmRunnerString,
+                inferenceEngine,
+                model,
+            },
+            timeout: 10 * 60 * 1000, // 10 minutes
+
+        }).then((res) => res);
+
+        return {
+            status: result.status,
+            message: result.data?.message ?? "Success",
+            data: result.data ?? {},
+        };
+    } catch (err: any) {
+        console.log(err)
+        if (axios.isAxiosError(err)) {
+            return {
+                status: err.response?.status ?? 500,
+                message:
+                    err.response?.data?.message ??
+                    "GraphRAG request failed",
+                data: null,
+            };
+        }
+
+        return {
+            status: 500,
+            message: "Unexpected server error",
+            data: null,
+        };
+    }
+}
+
 
 export async function stopConstructKG(
 
