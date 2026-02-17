@@ -12,9 +12,11 @@ interface PathNode {
 }
 
 interface PathRel {
-    direction: string;
     id: string;
     type: string;
+    source: string;
+    target: string;
+    direction: string;
 }
 
 interface QueryGraphProps {
@@ -33,10 +35,7 @@ const PARTITION_COLORS = [
     "#0B3C5D",
 ];
 
-export default function QueryGraph({
-                                       pathNodes,
-                                       pathRels,
-                                   }: QueryGraphProps) {
+export default function QueryGraph({ pathNodes, pathRels }: QueryGraphProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -48,22 +47,14 @@ export default function QueryGraph({
         const existingNodeIds = new Set<string>();
         const existingEdgeIds = new Set<string>();
 
-        const seedNodeId = pathNodes?.[0]?.id;
-
         const colorMap = new Map<string, string>();
 
         // Build Nodes
-        pathNodes?.forEach((node) => {
+        pathNodes.forEach((node) => {
             const partition = node.partitionID ?? "0";
 
             if (!colorMap.has(partition)) {
-                const color =
-                    node.id === seedNodeId
-                        ? "#6CB8E6"
-                        : PARTITION_COLORS[
-                        parseInt(partition) %
-                        PARTITION_COLORS.length
-                            ];
+                const color = PARTITION_COLORS[parseInt(partition) % PARTITION_COLORS.length];
                 colorMap.set(partition, color);
             }
 
@@ -80,37 +71,39 @@ export default function QueryGraph({
             }
         });
 
-        // Build Edges
-        for (let i = 0; i < pathRels?.length; i++) {
-            const rel = pathRels[i];
-            const source = pathNodes[i]?.id;
-            const target = pathNodes[i + 1]?.id;
+        // Build Edges (branching supported)
+        pathRels.forEach((rel) => {
+            if (!rel.source || !rel.target) return;
 
-            if (!source || !target) continue;
-
-            const edgeId = `${source}_${rel.type}_${target}`;
-
+            const edgeId = `${rel.source}_${rel.type}_${rel.target}`;
             if (!existingEdgeIds.has(edgeId)) {
                 existingEdgeIds.add(edgeId);
 
                 edges.add({
                     id: edgeId,
-                    from: source,
-                    to: target,
+                    from: rel.source,
+                    to: rel.target,
                     label: rel.type || "related_to",
                     arrows: "to",
+                    smooth: { enabled: true, type: "dynamic" },
                 });
             }
-        }
+        });
 
         const options: any = {
-            layout: { improvedLayout: true },
+            layout: {
+                improvedLayout: true,
+                hierarchical: false, // set true if you want a tree-like layout
+            },
             physics: {
                 enabled: true,
                 barnesHut: {
-                    gravitationalConstant: -5000,
-                    springLength: 120,
+                    gravitationalConstant: -3000,
+                    springLength: 200,
+                    springConstant: 0.05,
+                    damping: 0.09,
                 },
+                stabilization: { iterations: 200 },
             },
             nodes: {
                 shape: "dot",
@@ -122,11 +115,7 @@ export default function QueryGraph({
             },
         };
 
-        const network = new Network(
-            containerRef.current,
-            { nodes, edges },
-            options
-        );
+        const network = new Network(containerRef.current, { nodes, edges }, options);
 
         return () => {
             network.destroy();
@@ -138,7 +127,7 @@ export default function QueryGraph({
             ref={containerRef}
             style={{
                 width: "100%",
-                height: "350px",
+                height: "500px",
                 border: "1px solid #e5e7eb",
                 borderRadius: "6px",
                 backgroundColor: "#ffffff",

@@ -400,6 +400,7 @@ export const graphRAGQuery = async (req: Request, res: Response) => {
 
                         // Extract clean answer (optional cleanup)
                         const cleanAnswer = msg.replace(/^ANSWER[:\s-]*/i, "").trim();
+                        const jsonResults = JSON.parse(cleanAnswer);
 
                         // Dummy objectives data
                         const dummyObjectives = [
@@ -529,11 +530,7 @@ export const graphRAGQuery = async (req: Request, res: Response) => {
                         ];
 
 
-                        res.status(200).send({
-                            answer: cleanAnswer || "Annentee bronthe",
-                            plan_type: "DECOMPOSED",
-                            objectives: dummyObjectives
-                        });
+                        res.status(200).send(jsonResults);
                         clearTimeout(timeout);
                         resolve();
                     }

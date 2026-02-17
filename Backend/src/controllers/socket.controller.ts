@@ -21,7 +21,8 @@ import {
     CYPHER_COMMAND,
     INDEGREE_COMMAND,
     OUTDEGREE_COMMAND,
-    SEMANTIC_BEAM_SEARCH_COMMAND
+    SEMANTIC_BEAM_SEARCH_COMMAND,
+    GRAPHRAG_QUERY_COMMAND
 } from '../constants/frontend.server.constants';
 import { getClusterDetails, IConnection, telnetConnection } from "./graph.controller";
 import { getClusterByIdRepo } from '../repository/cluster.repository';
@@ -56,6 +57,15 @@ export const setupWebSocket = (server: any) => {
       }
         if (data.type === 'SBS') {
             semanticBeamSearch(data.clientId, data.clusterId, data.graphId, data.query);
+        }
+        if (data.type === 'GRAPHRAG') {
+            streamGraphRAG(data.clientId, data.clusterId, data.graphId, {
+                messageId: data.messageId,
+                query: data.query,
+                llmRunnerString: data.llmRunnerString,
+                inferenceEngine: data.inferenceEngine,
+                model: data.model
+            });
         }
 
         if (data.type === 'UPBYTES') {
@@ -284,6 +294,238 @@ const semanticBeamSearch = async (clientId: string, clusterId:string, graphId:st
         return console.log({ code: ErrorCode.ServerError, message: ErrorMsg.ServerError, errorDetails: err });
     }
 }
+const streamGraphRAG = async (
+    clientId: string,
+    clusterId: string,
+    graphId: string,
+    payload: {
+        messageId: string;            // ✅ added
+        query: string;
+        llmRunnerString: string;
+        inferenceEngine: string;
+        model: string;
+    }
+) => {
+
+    const cluster = await getClusterByIdRepo(Number(clusterId));
+
+    if (!(cluster?.host && cluster?.port)) {
+        sendToClient(clientId, {
+            type: "GRAPHRAG_ERROR",
+            messageId: payload.messageId,
+            error: "cluster not found"
+        });
+        return;
+    }
+
+    const connection: IConnection = {
+        host: cluster.host,
+        port: cluster.port
+    };
+
+    try {
+
+        await new Promise<void>((resolve) => {
+
+            telnetConnection({ host: connection.host, port: connection.port })(
+                (tSocket: any) => {
+
+                    let answered = false;
+                    let stopRequested = false;
+
+                    // const timeout = setTimeout(() => {
+                    //     if (!answered) {
+                    //         console.error("GraphRAG stream timeout");
+                    //
+                    //         sendToClient(clientId, {
+                    //             type: "GRAPHRAG_ERROR",
+                    //             messageId: payload.messageId,
+                    //             error: "GraphRAG timeout"
+                    //         });
+                    //
+                    //         tSocket.end();
+                    //         resolve();
+                    //     }
+                    // }, 720000); // 2 minutes
+
+                    /* Cleanup if WebSocket closes */
+                    const client = clients.get(clientId);
+                    // if (client) {
+                    //     client.on("close", () => {
+                    //         stopRequested = true;
+                    //         tSocket.end();
+                    //         clearTimeout(timeout);
+                    //         resolve();
+                    //     });
+                    //
+                    //     client.on("error", () => {
+                    //         stopRequested = true;
+                    //         tSocket.end();
+                    //         clearTimeout(timeout);
+                    //         resolve();
+                    //     });
+                    // }
+
+                    /* Main Telnet Data Handler */
+                    tSocket.on("data", (buffer: Buffer) => {
+
+                        if (stopRequested) return;
+
+                        const msg = buffer.toString("utf8").trim();
+                        console.log("GraphRAG:", msg);
+
+                        /* 1. Graph ID */
+                        if (msg.includes("Graph ID")) {
+                            tSocket.write(graphId.toString().trim() + "\n");
+                        }
+
+                        /* 2. NL query */
+                        else if (msg.includes("Input natural language query")) {
+                            tSocket.write(payload.query.trim() + "\n");
+                        }
+
+                        /* 3. LLM runner */
+                        else if (msg.includes("LLM runner hostname")) {
+                            tSocket.write(payload.llmRunnerString.trim() + "\n");
+                        }
+
+                        /* 4. Inference engine */
+                        else if (msg.includes("LLM inference engine")) {
+                            tSocket.write(payload.inferenceEngine.trim() + "\n");
+                        }
+
+                        /* 5. Model */
+                        else if (msg.includes("LLM you want to use")) {
+                            tSocket.write(payload.model.trim() + "\n");
+
+                        }
+
+                        /* 6. Model fallback */
+                        else if (msg.includes("not available on ollama server")) {
+                            console.warn("Model missing, fallback to llama3");
+                            tSocket.write("llama3\n");
+                        }
+
+                        /* 7. Final Answer */
+                        else if (
+                            msg.startsWith("ANSWER") ||
+                            msg.startsWith("Result") ||
+                            msg.includes("GraphRAG response")
+                        ) {
+
+                            answered = true;
+
+                            let parsed: any = msg;
+
+                            try {
+                                const cleanAnswer = msg
+                                    .replace(/^ANSWER[:\s-]*/i, "")
+                                    .trim();
+
+                                parsed = JSON.parse(cleanAnswer);
+                            } catch {
+                                parsed = { message: msg };
+                            }
+
+                            sendToClient(clientId, {
+                                type: "GRAPHRAG_RESULT",
+                                messageId: payload.messageId,
+                                data: parsed
+                            });
+
+                            sendToClient(clientId, {
+                                type: "GRAPHRAG_DONE",
+                                messageId: payload.messageId
+                            });
+                            answered = true;
+                            tSocket.write("exit\n");
+                            // clearTimeout(timeout);
+                            resolve();
+                        }
+
+                        /* 8. Fatal Errors */
+                        else if (
+                            msg.includes("Could not connect") ||
+                            msg.includes("Socket") ||
+                            msg.includes("ERROR")
+                        ) {
+
+                            sendToClient(clientId, {
+                                type: "GRAPHRAG_ERROR",
+                                messageId: payload.messageId,
+                                error: msg
+                            });
+
+                            tSocket.write("exit\n");
+                            // clearTimeout(timeout);
+                            resolve();
+                        } else if (
+                            msg.includes("done")){
+                            if(!answered){
+                                sendToClient(clientId, {
+                                    type: "GRAPHRAG_ERROR",
+                                    messageId: payload.messageId,
+                                    error: "Sorry, Something went wrong"
+                                });
+                            }
+
+
+                        }
+
+                        /* 9. Intermediate streaming */
+                        else {
+
+                            sendToClient(clientId, {
+                                type: "GRAPHRAG_STREAM",
+                                messageId: payload.messageId,
+                                data: { message: msg }
+                            });
+                        }
+                    });
+
+                    tSocket.on("end", () => {
+                        console.log(`GraphRAG telnet ended for ${clientId}`);
+
+                        sendToClient(clientId, {
+                            type: "GRAPHRAG_DONE",
+                            messageId: payload.messageId
+                        });
+
+                        // clearTimeout(timeout);
+                        resolve();
+                    });
+
+                    tSocket.on("error", (err: any) => {
+
+                        console.error("GraphRAG socket error:", err);
+
+                        sendToClient(clientId, {
+                            type: "GRAPHRAG_ERROR",
+                            messageId: payload.messageId,
+                            error: err.message
+                        });
+
+                        // clearTimeout(timeout);
+                        resolve();
+                    });
+
+                    /* Kick off GraphRAG */
+                    tSocket.write(GRAPHRAG_QUERY_COMMAND + "\n");
+                }
+            );
+        });
+
+    } catch (err) {
+
+        console.error("GraphRAG streaming failed:", err);
+
+        sendToClient(clientId, {
+            type: "GRAPHRAG_ERROR",
+            messageId: payload.messageId,
+            error: "Server error"
+        });
+    }
+};
 
 
 const streamUploadBytes = async (clientId: string, clusterId: string, graphIds: string[]) => {

@@ -32,6 +32,7 @@ const getClusterID = () => {
 
 export const authApi = axios.create({
   headers: {
+      timeout: 100000,
       "Content-Type": "application/json",
       "Accept": "application/json",
       "Authorization": "Bearer " + getAccessToken(),

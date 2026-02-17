@@ -50,7 +50,7 @@ export interface Objective {
     id: string;
     query: string;
     search_type: string;
-    results: ObjectiveResult[];
+    retrieved_paths: ObjectiveResult[];
 }
 
 export interface IRagResult {
@@ -136,7 +136,7 @@ export const graphRagDataSlice = createSlice({
 
         attach_Rag_To_Message: (
             state,
-            action: PayloadAction<{ id: string; ragResult: IRagResult }>
+            action: PayloadAction<{ id: any; ragResult: IRagResult }>
         ) => {
             const msg = state.chatHistory.find(m => m.id === action.payload.id);
             if (msg) msg.ragResult = action.payload.ragResult;
