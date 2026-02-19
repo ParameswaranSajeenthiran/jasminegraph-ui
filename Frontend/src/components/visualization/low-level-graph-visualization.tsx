@@ -49,6 +49,9 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
     const [hoveredNode, setHoveredNode] = useState<any | null>(null);
     const [hoveredEdge, setHoveredEdge] = useState<any | null>(null);
     const [retrievedAt, setRetrievedAt] = useState<string | null>(null);
+    const [isFiltered, setIsFiltered] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isolatedNode, setIsolatedNode] = useState<string | null>(null);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const graphRef = useRef<any>(null);
@@ -65,20 +68,39 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
         }
         return partitionColorMap.current.get(partitionID)!;
     };
+    const resetGraphVisibility = () => {
+        const graph = graphRef.current;
+        if (!graph) return;
+
+        graph.forEachNode((n: string) => {
+            graph.setNodeAttribute(n, "hidden", false);
+            graph.setNodeAttribute(n, "highlighted", false);
+        });
+
+        graph.forEachEdge((e: string) => {
+            graph.setEdgeAttribute(e, "hidden", false);
+            graph.setEdgeAttribute(e, "highlighted", false);
+        });
+
+        setIsolatedNode(null);
+    };
 
     const handleSearch = (query: string) => {
-        if (!query || query == "" || !graphRef.current || !rendererRef.current) return;
+        if (!graphRef.current || !rendererRef.current) return;
 
         const graph = graphRef.current;
         const renderer = rendererRef.current;
         const camera = renderer.getCamera();
-        const lowerQuery = query.toLowerCase();
+
+        const lowerQuery = query?.toLowerCase().trim();
+        setSearchQuery(query);
+
+        if (!lowerQuery) return;
 
         const matchedNodes: string[] = [];
 
-        // Search by ID and attributes
         graph.forEachNode((node: string, attrs: any) => {
-            if (node.toString().includes(lowerQuery)) {
+            if (node.toString().toLowerCase().includes(lowerQuery)) {
                 matchedNodes.push(node);
             } else {
                 for (const key in attrs) {
@@ -93,36 +115,43 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
 
         if (matchedNodes.length === 0) return;
 
-        // Reset all highlights
-        graph.forEachNode((node: string) => graph.setNodeAttribute(node, "highlighted", false));
-        graph.forEachEdge((edge: string) => graph.setEdgeAttribute(edge, "highlighted", false));
+        setIsFiltered(true);
 
-        // Highlight matched nodes
-        matchedNodes.forEach((node) => graph.setNodeAttribute(node, "highlighted", true));
-
-        // Highlight edges connecting matched nodes
-        graph.forEachEdge((edge: string, attr: any, source: string, target: string) => {
-            if (matchedNodes.includes(source) && matchedNodes.includes(target)) {
-                graph.setEdgeAttribute(edge, "highlighted", true);
-            }
+        // Hide all except matches
+        graph.forEachNode((node: string) => {
+            const visible = matchedNodes.includes(node);
+            graph.setNodeAttribute(node, "hidden", !visible);
+            graph.setNodeAttribute(node, "highlighted", visible);
         });
 
-        // Optionally zoom to fit all matched nodes
-        const positions = matchedNodes.map((node) => renderer.getNodeDisplayData(node)).filter(Boolean);
+        graph.forEachEdge((edge: string, attr: any, source: string, target: string) => {
+            const visible =
+                matchedNodes.includes(source) &&
+                matchedNodes.includes(target);
+
+            graph.setEdgeAttribute(edge, "hidden", !visible);
+            graph.setEdgeAttribute(edge, "highlighted", visible);
+        });
+
+        // Zoom
+        const positions = matchedNodes
+            .map((node) => renderer.getNodeDisplayData(node))
+            .filter(Boolean);
+
         if (positions.length > 0) {
             const xValues = positions.map((p) => p!.x);
             const yValues = positions.map((p) => p!.y);
-            const minX = Math.min(...xValues);
-            const maxX = Math.max(...xValues);
-            const minY = Math.min(...yValues);
-            const maxY = Math.max(...yValues);
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
-            const ratio = Math.max(maxX - minX, maxY - minY) / 400 + 0.1; // adjust zoom factor
-            camera.animate({x: centerX, y: centerY, ratio}, {duration: 700, easing: "linear"});
+
+            const centerX = (Math.min(...xValues) + Math.max(...xValues)) / 2;
+            const centerY = (Math.min(...yValues) + Math.max(...yValues)) / 2;
+            const ratio = Math.max(
+                Math.max(...xValues) - Math.min(...xValues),
+                Math.max(...yValues) - Math.min(...yValues)
+            ) / 400 + 0.1;
+
+            camera.animate({ x: centerX, y: centerY, ratio }, { duration: 600 });
         }
     };
-
 
     // Initialize Sigma once
     useEffect(() => {
@@ -138,24 +167,28 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
 
             // Click selects node
             // renderer.on("clickNode", ({node}) => setSelectedNodeId(Number(node)));
+            renderer.on("clickNode", ({ node }) => {
+                const graph = graphRef.current;
+                if (!graph) return;
 
-            // --- HOVER TOOLTIP EVENTS ---
-            renderer.on("enterNode", ({ node }) => {
-                const attrs = graph.getNodeAttributes(node);
-                setHoveredNode({ id: node, ...attrs });
+                // 🔁 If clicking the same node again → reset
+                if (isolatedNode === node) {
+                    resetGraphVisibility();
+                    return;
+                }
+
+                // Otherwise isolate this node
+                setIsolatedNode(node);
 
                 const neighbors = new Set(graph.neighbors(node));
 
-                // Show only hovered node and its neighbors
-                graph.forEachNode((n) => {
+                graph.forEachNode((n: string) => {
                     const visible = n === node || neighbors.has(n);
-
                     graph.setNodeAttribute(n, "hidden", !visible);
                     graph.setNodeAttribute(n, "highlighted", visible);
                 });
 
-                // Show only edges connected to the hovered node
-                graph.forEachEdge((edge, attr, source, target) => {
+                graph.forEachEdge((edge: string, attr: any, source: string, target: string) => {
                     const visible =
                         source === node ||
                         target === node ||
@@ -166,20 +199,43 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
                 });
             });
 
+            // --- HOVER TOOLTIP EVENTS ---
+            // renderer.on("enterNode", ({ node }) => {
+            //     if (isFiltered) return; // 🚫 Do nothing if already filtered
+            //
+            //     const attrs = graph.getNodeAttributes(node);
+            //     setHoveredNode({ id: node, ...attrs });
+            //
+            //     const neighbors = new Set(graph.neighbors(node));
+            //
+            //     setIsFiltered(true);
+            //
+            //     graph.forEachNode((n) => {
+            //         const visible = n === node || neighbors.has(n);
+            //         graph.setNodeAttribute(n, "hidden", !visible);
+            //         graph.setNodeAttribute(n, "highlighted", visible);
+            //     });
+            //
+            //     graph.forEachEdge((edge, attr, source, target) => {
+            //         const visible =
+            //             source === node ||
+            //             target === node ||
+            //             (neighbors.has(source) && neighbors.has(target));
+            //
+            //         graph.setEdgeAttribute(edge, "hidden", !visible);
+            //         graph.setEdgeAttribute(edge, "highlighted", visible);
+            //     });
+            // });
+
+            renderer.on("enterNode", ({ node }) => {
+                const attrs = graph.getNodeAttributes(node);
+                setHoveredNode({ id: node, ...attrs });
+            });
 
             renderer.on("leaveNode", () => {
-                graph.forEachNode((n) => {
-                    graph.setNodeAttribute(n, "hidden", false);
-                    graph.setNodeAttribute(n, "highlighted", false);
-                });
-
-                graph.forEachEdge((e) => {
-                    graph.setEdgeAttribute(e, "hidden", false);
-                    graph.setEdgeAttribute(e, "highlighted", false);
-                });
-
                 setHoveredNode(null);
             });
+
 
 
 
@@ -312,21 +368,56 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
                         left: "50%",
                         transform: "translateX(-50%)",
                         zIndex: 20,
-                        width: 300,
+                        width: 350,
+                        display: "flex",
+                        gap: 8
                     }}
                 >
                     <input
                         type="text"
                         placeholder="Search node by ID or label..."
+                        value={searchQuery}
                         onChange={(e) => handleSearch(e.target.value)}
                         style={{
-                            width: "100%",
+                            flex: 1,
                             padding: "8px 12px",
                             borderRadius: 8,
                             border: "1px solid #ccc",
                             fontSize: 14,
                         }}
                     />
+
+                    {isFiltered && (
+                        <button
+                            onClick={() => {
+                                const graph = graphRef.current;
+                                if (!graph) return;
+
+                                graph.forEachNode((n: string) => {
+                                    graph.setNodeAttribute(n, "hidden", false);
+                                    graph.setNodeAttribute(n, "highlighted", false);
+                                });
+
+                                graph.forEachEdge((e: string) => {
+                                    graph.setEdgeAttribute(e, "hidden", false);
+                                    graph.setEdgeAttribute(e, "highlighted", false);
+                                });
+
+                                setIsFiltered(false);
+                                setSearchQuery("");
+                            }}
+                            style={{
+                                background: "#ff4d4f",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 8,
+                                padding: "0 12px",
+                                cursor: "pointer"
+                            }}
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
 
                 <div ref={containerRef} style={{width: "100%", height: "100%"}}>

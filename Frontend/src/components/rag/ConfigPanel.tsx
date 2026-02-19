@@ -162,8 +162,8 @@ export default function ConfigPanel() {
                             }}
                             options={[
                                 { label: "OpenAI", value: "openai" },
-                                { label: "vLLM Server", value: "vllm" },
-                                { label: "Ollama (Local)", value: "ollama" },
+                                { label: "vLLM", value: "vllm" },
+                                { label: "Ollama", value: "ollama" },
                             ]}
                         />
 
