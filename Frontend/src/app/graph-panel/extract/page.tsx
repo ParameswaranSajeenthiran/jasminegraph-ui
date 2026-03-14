@@ -35,10 +35,9 @@ import {
 import HadoopKgForm from "@/components/extract-panel/hadoop-kg-form";
 import {LRUCache} from "lru-cache";
 import Status = LRUCache.Status;
-import { DownOutlined, UpOutlined } from "@ant-design/icons";
+import { DownOutlined, UpOutlined, PauseOutlined, CaretRightOutlined } from "@ant-design/icons";
 import {IKnowledgeGraph} from "@/types/graph-types";
 import KgForm from "@/components/extract-panel/kg-form";
-
 const { Dragger } = Upload;
 const { Search } = Input;
 const { Title, Text } = Typography;
@@ -86,6 +85,7 @@ export default function GraphUpload() {
     const [loading, setLoading] = useState<boolean>(false);
     const [clientId, setClientID] = useState<string>('');
     const [showMeta, setShowMeta] = useState<string>("");
+    const [showRequestedGraphId, setShowRequestedGraphId] = useState<string>("")
     const [pausedGraphs, setPausedGraphs] = useState<Record<string, boolean>>({});
     const [tpsHistory, setTpsHistory] = useState<Record<string, number[]>>({});
     const getAverageTPS = (graphId: string) => {
@@ -159,7 +159,7 @@ export default function GraphUpload() {
 
 
             dispatch(add_upload_bytes({ ...message }));
-
+            console.log(message)
             setLoading(false);
         }
     }, [lastJsonMessage]);
@@ -256,6 +256,7 @@ export default function GraphUpload() {
             <Modal title=""   footer={null}     open={hadoopModalOpen} onCancel={()=>setHadoopModelOpen(false)}>
                 {hadoopModalOpen  && <HadoopKgForm  currentPage={isLocalFileUpload? 1: 0} initForm={initForm as IKnowledgeGraph} onSuccess={()=>  {
                     setShowUploadSection(false)
+                    setShowRequestedGraphId()
                     setHadoopModelOpen(false)}}/>
                 }
             </Modal>
@@ -282,16 +283,9 @@ export default function GraphUpload() {
                         }}
                     >
                         <Typography>
-
                             {/* ✅ Show Metadata */}
-
                                     <>
-
                                         <div key={upload.graphId}>
-
-
-
-
                                             <div
                                                 onClick={() => setShowMeta(upload.graphId)}
                                                 style={{
@@ -346,7 +340,7 @@ export default function GraphUpload() {
 
                                         <div style={{ marginTop: "10px" }}>
 
-                                            <SegmentedProgress progress={upload.percentage}  />
+                                            <SegmentedProgress progress={upload.percentage > 90 ? 100 : upload.percentage}  />
                                         </div>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontSize: "14px" }}>
@@ -362,29 +356,38 @@ export default function GraphUpload() {
                                                 <Text type="secondary">Start Time: {upload.startTime}</Text>
                                             </div>
                                         )}
+                                        {upload.uploadEndTime && (
+                                            <div style={{ marginTop: "2px", fontSize: "14px", textAlign: "right" }}>
+                                                <Text type="secondary">Last Stopped Time: {upload.uploadEndTime}</Text>
+                                            </div>
+                                        )}
 
                                         {/* Pause & Stop buttons */}
-                                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                                            <Button
-                                                type={pausedGraphs[upload.graphId] ? "default" : "primary"}
-                                                onClick={() =>{
-                                                    if (upload.kgConstructionStatus === "paused") {
-                                                        getKGConstructionMetaData(upload.graphId).then(kgConstructMeta=>{
-                                                            setInitForm(upload);
-                                                            setHadoopModelOpen(true);
-                                                            message.success("Graph construction paused");
-                                                            setPausedGraphs((prev) => ({ ...prev, [upload.graphId]: true }));
-                                                        })
-                                                    }else {
-                                                        pauseKGConstruction(upload.graphId)
+                                        <div  style={{ display:upload.percentage > 90 ? "none" : "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
 
+                                            {<Button
+
+                                                type={     upload.kgConstructionStatus === "paused" || upload.kgConstructionStatus === "stopped" ? "default" : "primary"}
+                                                icon={ showRequestedGraphId == upload.graphId ? null : upload.kgConstructionStatus === "paused" || upload.kgConstructionStatus === "stopped" ? <CaretRightOutlined /> : <PauseOutlined />}
+                                                         onClick={() =>{
+                                                if (upload.kgConstructionStatus === "stopped") {
+                                                    const temp = upload.uploadPath.split(":")
+                                                    if (temp.length > 1) {
+                                                        setInitForm({ ...upload, hdfsFilePath:temp[1] });
+                                                    } else {
+                                                        setInitForm(upload);
                                                     }
+                                                    setHadoopModelOpen(true);
+                                                    message.success("Graph construction paused");
+                                                    setPausedGraphs((prev) => ({ ...prev, [upload.graphId]: true }));
 
-                                                }}
-                                            >
-                                                {upload.kgConstructionStatus === "paused" ? "Resume" : "Pause"}
-                                            </Button>
-                                            <Button danger onClick={() => stopKGConstruction(upload.graphId)}>Stop</Button>
+
+                                                }else {
+                                                    pauseKGConstruction(upload.graphId)
+
+                                                }
+
+                                            }}>{showRequestedGraphId == upload.graphId ? "requested": ( upload.kgConstructionStatus === "paused" || upload.kgConstructionStatus === "stopped" ? "resume" : "pause")}</Button>}
                                         </div>
                                     </>
 

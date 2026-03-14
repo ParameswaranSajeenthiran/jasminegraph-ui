@@ -61,23 +61,25 @@ const HadoopKgForm = ({
     useEffect(() => {
         if (initForm && Object.keys(initForm).length > 0) {
             const newValues: any = { ...initForm };
+
             if (initForm.llmRunnerString) {
-                const counts: Record<string, number> = {};
-                initForm.llmRunnerString.split(",").forEach((r) => {
-                    counts[r] = (counts[r] || 0) + 1;
+                newValues.llmRunnerString = initForm.llmRunnerString.split(",").map((entry) => {
+                    const parts = entry.split(":");
+
+                    const runner = parts.slice(0, 2).join(":"); // http://ip:port
+                    const chunks = Number(parts[2] || 0);       // chunk count
+
+                    return { runner, chunks };
                 });
-                newValues.llmAllocations = Object.entries(counts).map(([runner, chunks]) => ({
-                    runner,
-                    chunks,
-                }));
             }
+
             form.setFieldsValue(newValues);
             setSavedValues(newValues);
         }
     }, [initForm, form]);
     useEffect(() => {
         // Determine initial step
-        if (initForm?.status === "paused") {
+        if (initForm?.kgConstructionStatus === "paused" ||initForm?.kgConstructionStatus === "stopped" ) {
             setCurrentStep(1); // Skip HDFS step
         } else {
             if(currentPage == 1 ){
@@ -263,7 +265,7 @@ const HadoopKgForm = ({
                 finalValues.inferenceEngine,
                 finalValues.model,
                 finalValues.chunkSize,
-                initForm?.status,
+                initForm?.kgConstructionStatus,
                 initForm?.graphId
             );
 

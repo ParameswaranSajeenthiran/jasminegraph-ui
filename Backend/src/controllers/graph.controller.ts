@@ -211,6 +211,7 @@ export const constructKG = async (req: Request, res: Response) => {
         model,
         chunkSize,
         status,
+        kgConstructionStatus,
         graphId
     } = req.body;
     console.log("req.body", req.body)
@@ -238,7 +239,7 @@ export const constructKG = async (req: Request, res: Response) => {
                 } else if (msg.includes("HDFS file path:")) {
                     tSocket.write(hdfsFilePath.toString("utf8").trim() + "\n");
                 } else if (msg.includes("There exists a graph with the file path")) {
-                    if (status === "paused") {
+                    if (kgConstructionStatus === "paused" || kgConstructionStatus === "stopped") {
                         tSocket.write("y\n"); // or "n" depending on user choice
 
                     } else {
@@ -402,132 +403,6 @@ export const graphRAGQuery = async (req: Request, res: Response) => {
                         const cleanAnswer = msg.replace(/^ANSWER[:\s-]*/i, "").trim();
                         const jsonResults = JSON.parse(cleanAnswer);
 
-                        // Dummy objectives data
-                        const dummyObjectives = [
-                            {
-                                id: "objA1",
-                                query: "Which director of the 1995 film Silent Horizon won a Golden Globe Award?",
-                                search_type: "SEMANTIC_BEAM_SEARCH",
-                                llm_reasoning: {
-                                    summarizedPathObj : {
-                                        pathNodes: [
-                                            { id: "622", label: "Person", name: "Laura Bennett", partitionID: "4" },
-                                            { id: "620", label: "Book", name: "Crimson Echo", partitionID: "4" }
-                                        ],
-                                        pathRels: [
-                                            { direction: "right", id: "9011", type: "WROTE" }
-                                        ]
-                                    }
-                                },
-                                results: [
-                                    {
-                                        hop: 2,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "201", label: "Person", name: "Emily Carter", partitionID: "2" },
-                                                { id: "305", label: "Movie", name: "Silent Horizon", partitionID: "2" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "right", id: "9001", type: "DIRECTED" }
-                                            ]
-                                        },
-                                        score: 0.91
-                                    },
-                                    {
-                                        hop: 3,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "201", label: "Person", name: "Emily Carter", partitionID: "2" },
-                                                { id: "410", label: "Award", name: "Golden Globe Award", partitionID: "3" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "right", id: "9002", type: "WON_AWARD" }
-                                            ]
-                                        },
-                                        score: 0.87
-                                    },
-                                    {
-                                        hop: 1,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "512", label: "Person", name: "Michael Reeves", partitionID: "2" },
-                                                { id: "305", label: "Movie", name: "Silent Horizon", partitionID: "2" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "right", id: "9003", type: "ACTED_IN" }
-                                            ]
-                                        },
-                                        score: 0.74
-                                    }
-                                ]
-                            },
-                            {
-                                id: "objB2",
-                                query: "In which year was the novel Crimson Echo published?",
-                                search_type: "SEMANTIC_BEAM_SEARCH",
-                                results: [
-                                    {
-                                        hop: 1,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "620", label: "Book", name: "Crimson Echo", partitionID: "4" },
-                                                { id: "621", label: "Year", name: "2003", partitionID: "4" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "right", id: "9010", type: "PUBLISHED_IN" }
-                                            ]
-                                        },
-                                        score: 0.95
-                                    },
-                                    {
-                                        hop: 2,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "622", label: "Person", name: "Laura Bennett", partitionID: "4" },
-                                                { id: "620", label: "Book", name: "Crimson Echo", partitionID: "4" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "right", id: "9011", type: "WROTE" }
-                                            ]
-                                        },
-                                        score: 0.81
-                                    }
-                                ]
-                            },
-                            {
-                                id: "objC3",
-                                query: "Which university did the CEO of TechNova Inc. graduate from?",
-                                search_type: "SEMANTIC_BEAM_SEARCH",
-                                results: [
-                                    {
-                                        hop: 2,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "730", label: "Person", name: "Daniel Kim", partitionID: "5" },
-                                                { id: "731", label: "Organization", name: "TechNova Inc.", partitionID: "5" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "left", id: "9020", type: "CEO_OF" }
-                                            ]
-                                        },
-                                        score: 0.88
-                                    },
-                                    {
-                                        hop: 3,
-                                        pathObj: {
-                                            pathNodes: [
-                                                { id: "730", label: "Person", name: "Daniel Kim", partitionID: "5" },
-                                                { id: "732", label: "University", name: "Stanford University", partitionID: "6" }
-                                            ],
-                                            pathRels: [
-                                                { direction: "right", id: "9021", type: "GRADUATED_FROM" }
-                                            ]
-                                        },
-                                        score: 0.93
-                                    }
-                                ]
-                            }
-                        ];
 
 
                         res.status(200).send(jsonResults);
@@ -733,6 +608,8 @@ export const stopConstructKG = async (req: Request, res: Response) => {
                     tSocket.write("exit\n");
                     console.log("✅ KG extraction stopped successfully");
                     res.status(200).send({ message: "Knowledge Graph construction Stopped" });
+                } else if (msg.includes("Graph ID?")){
+                    tSocket.write(graphId.toString().trim() + "\n");
                 }
             });
 

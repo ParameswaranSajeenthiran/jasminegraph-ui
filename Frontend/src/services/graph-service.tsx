@@ -80,7 +80,7 @@ export async function constructKG(
     inferenceEngine: string | null,
     model: string | null,
     chunkSize: number | null,
-    status: string | null | undefined,
+    kgConstructionStatus: string | null | undefined,
     graphId: string | null | undefined
 ): Promise<{ status: any; message: any; data: any }> {
     try {
@@ -99,7 +99,7 @@ export async function constructKG(
                 inferenceEngine,
                 model,
                 chunkSize,
-                status,
+                kgConstructionStatus,
                 graphId
             },
         }).then((res) => res);

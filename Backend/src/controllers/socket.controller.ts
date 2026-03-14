@@ -578,6 +578,7 @@ const streamUploadBytes = async (clientId: string, clusterId: string, graphIds: 
                             percentage: number;
                             bytesPerSecond: number;
                             triplesPerSecond: number;
+
                             startTime: string;
                             uploadPath: string;
                             llmRunnerString: string;
@@ -587,9 +588,10 @@ const streamUploadBytes = async (clientId: string, clusterId: string, graphIds: 
                             kgConstructionStatus:string;
                             hdfsIp:string;
                             hdfsPort:string;
+                            uploadEndTime:string;
 
                         }[] = [];
-                        for (let i = 1; i < parts.length; i += 14) {
+                        for (let i = 1; i < parts.length; i += 16) {
                             const graphId = parts[i];
                             const uploaded = parseFloat(parts[i + 1] || "0");
                             const total = parseFloat(parts[i + 2] || "0");
@@ -605,8 +607,9 @@ const streamUploadBytes = async (clientId: string, clusterId: string, graphIds: 
                             const kgConstructionStatus = parts[i+12];
                             const hdfsIp = parts[i+13];
                             const hdfsPort = parts[i+14];
+                            const uploadEndTime = parts[i+15];
 
-                            updates.push({ graphId, uploaded, total, percentage, bytesPerSecond, triplesPerSecond, startTime, uploadPath, llmRunnerString, inferenceEngine, model, chunkSize, kgConstructionStatus, hdfsIp, hdfsPort});
+                            updates.push({ graphId, uploaded, total, percentage, bytesPerSecond, triplesPerSecond, startTime, uploadPath, llmRunnerString, inferenceEngine, model, chunkSize, kgConstructionStatus, hdfsIp, hdfsPort, uploadEndTime});
                         }
                         updates = updates.reverse();
                         // Send updates only if still connected

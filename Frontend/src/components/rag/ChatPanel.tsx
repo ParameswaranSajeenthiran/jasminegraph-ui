@@ -5,7 +5,7 @@ import { queryGraphRAG } from "@/services/graph-service";
 import { useAppDispatch, useAppSelector } from "@/redux/hook";
 import {
     add_Chat_Message,
-    set_Loading, attach_Rag_To_Message, set_Active_Message, IRagResult,
+    set_Loading, attach_Rag_To_Message, set_Active_Message, IRagResult, clear_Chat_History,
 } from "@/redux/features/graphRagData";
 import { set_Config_Collapsed } from "@/redux/features/graphRagData";
 import useWebSocket, {ReadyState} from "react-use-websocket";
@@ -50,8 +50,12 @@ export default function ChatPanel() {
 
             // 1️⃣ Add user message
 
-            dispatch(add_Chat_Message({  id : messageId, role: "user", content: userMessage }));
-            dispatch(set_Loading(true));
+            dispatch(add_Chat_Message({
+                id: messageId,
+                role: "user",
+                content: userMessage,
+                timestamp: new Date().toISOString(),
+            }));            dispatch(set_Loading(true));
             setLoading(true)
             setInput("");
             dispatch(set_Config_Collapsed(true));
@@ -124,6 +128,7 @@ export default function ChatPanel() {
             // Replace content in assistant message
             const answerText = ragResult.answer || JSON.stringify(ragResult, null, 2);
             dispatch(add_Chat_Message({
+                timestamp: new Date().toISOString(),
                 id: messageId,
                 role: "assistant",
                 content: answerText
@@ -145,6 +150,7 @@ export default function ChatPanel() {
         // 5️⃣ Error
         if (type === "GRAPHRAG_ERROR") {
             dispatch(add_Chat_Message({
+                timestamp: new Date().toISOString(),
                 id: messageId,
                 role: "assistant",
                 content: `❌ ${error}`
@@ -156,68 +162,19 @@ export default function ChatPanel() {
 
     }, [lastJsonMessage]);
 
-    const handleSend = async () => {
-        if (!input.trim()) return;
-
-        if (!selectedGraph || !selectedModel || !selectedProvider) {
-            alert("Please select graph, provider and model first.");
-            return;
-        }
-        const messageId = crypto.randomUUID();
-
-        const userMessage = input;
-
-        dispatch(add_Chat_Message({  id : messageId, role: "user", content: userMessage }));
-        dispatch(set_Loading(true));
-        setInput("");
-        dispatch(set_Config_Collapsed(true));
-
-
-        try {
-            const response = await queryGraphRAG(
-                selectedGraph,
-                userMessage,
-                providerURL,
-                selectedProvider,
-                selectedModel
-            );
-
-            if (response.status !== 200) {
-                throw new Error(response.message);
-            }
-
-            const data = response.data;
-
-
-            dispatch(add_Chat_Message({
-                id: messageId,
-                role: "assistant",
-                content: data.answer,
-            }));
-
-            dispatch(attach_Rag_To_Message({
-                id: messageId,
-                ragResult: data,
-            }));
-
-            dispatch(set_Active_Message(messageId));
-        } catch (err: any) {
-            dispatch(
-                add_Chat_Message({
-                    id: messageId,
-
-                    role: "assistant",
-                    content: `⚠️ ${err.message || "GraphRAG failed"}`,
-                })
-            );
-        } finally {
-            dispatch(set_Loading(false));
-        }
-    };
 
     return (
         <div className="flex-1 flex flex-col h-full bg-white">
             {/* Chat Area */}
+            <div className="flex justify-between items-center px-6 py-3 border-b bg-white">
+                <h2 className="text-sm font-medium text-gray-700">Chat</h2>
+                <button
+                    onClick={() => dispatch(clear_Chat_History())}
+                    className="text-sm text-red-500 hover:text-red-600 transition"
+                >
+                    + New Chat
+                </button>
+            </div>
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-white">
                 {chatHistory.map((msg, index) => (
                     <div
@@ -242,6 +199,9 @@ export default function ChatPanel() {
                         >
 
                         {msg.content}
+                            <div className="text-[10px] text-white-400 mt-1 text-right">
+                                {new Date(msg.timestamp).toLocaleTimeString()}
+                            </div>
                         </div>
                         {msg.role === "user" && (
                             <button

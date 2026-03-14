@@ -21,6 +21,7 @@ export interface IChatMessage {
     content: string;
     ragResult?: IRagResult;
     id: string;
+    timestamp: string;
 
 }
 
@@ -110,6 +111,7 @@ export const graphRagDataSlice = createSlice({
 
         clear_Chat_History: (state) => {
             state.chatHistory = [];
+            state.activeMessageId = null;
         },
 
         // set_Rag_Result: (state, action: PayloadAction<IRagResult | null>) => {
@@ -132,6 +134,10 @@ export const graphRagDataSlice = createSlice({
         },
         set_Active_Message: (state, action: PayloadAction<string>) => {
             state.activeMessageId = action.payload;
+        },
+        clear_Chat: (state) => {
+            state.chatHistory = [];
+            state.activeMessageId = null;
         },
 
         attach_Rag_To_Message: (

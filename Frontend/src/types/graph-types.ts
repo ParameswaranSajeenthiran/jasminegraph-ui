@@ -51,6 +51,9 @@ export interface IKnowledgeGraph {
     uploadPath: string;
     kgConstructionStatus:string;
     uploaded:number;
+    uploadEndTime:string;
+
+
 
 
 }
