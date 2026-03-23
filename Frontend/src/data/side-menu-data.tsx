@@ -82,9 +82,9 @@ export const getSideMenuData = (router: AppRouterInstance, role: string) => {
       {
         key: Routes.SIDE_MENU_ROUTES.performance,
         icon: <SlidersOutlined />,
-        label: "Performance",
+        label: "Agent",
         onClick: () => {
-          onMenuClick(Routes.SIDE_MENU_ROUTES.performance);
+          onMenuClick(Routes.SIDE_MENU_ROUTES.rag);
         },
       },
       {
