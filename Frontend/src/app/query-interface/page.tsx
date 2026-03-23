@@ -28,7 +28,7 @@ type TabItem = Required<TabsProps>['items'][number];
 
 const { TextArea } = Input;
 
-const WS_URL = "ws://10.8.100.248:8080";
+const WS_URL = "ws://10.8.100.21:8080";
 
 export default function Query() {
   const dispatch = useAppDispatch();
