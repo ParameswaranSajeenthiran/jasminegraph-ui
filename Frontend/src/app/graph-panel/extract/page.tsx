@@ -42,7 +42,7 @@ const { Dragger } = Upload;
 const { Search } = Input;
 const { Title, Text } = Typography;
 
-const WS_URL = "ws://localhost:8080";
+const WS_URL = "ws://10.8.100.248:8080";
 
 interface IUploadBytes {
     graphId: string;
@@ -256,7 +256,7 @@ export default function GraphUpload() {
             <Modal title=""   footer={null}     open={hadoopModalOpen} onCancel={()=>setHadoopModelOpen(false)}>
                 {hadoopModalOpen  && <HadoopKgForm  currentPage={isLocalFileUpload? 1: 0} initForm={initForm as IKnowledgeGraph} onSuccess={()=>  {
                     setShowUploadSection(false)
-                    setShowRequestedGraphId()
+                    // setShowRequestedGraphId()
                     setHadoopModelOpen(false)}}/>
                 }
             </Modal>

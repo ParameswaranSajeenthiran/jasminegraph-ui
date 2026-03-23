@@ -80,12 +80,12 @@ interface IGraphRagState {
 
 const initialState: IGraphRagState = {
     selectedGraph: null,
-    selectedModel: "gemma3:12b",
+    selectedModel: "google/gemma-3-4b-it",
     chatHistory: [],
     activeMessageId: null,
     loading: false,
-    selectedProvider: "Ollama",
-    providerURL: "http://localhost:11435",
+    selectedProvider: "vllm",
+    providerURL: "http://10.8.100.24:6578",
     configCollapsed: false,
 };
 

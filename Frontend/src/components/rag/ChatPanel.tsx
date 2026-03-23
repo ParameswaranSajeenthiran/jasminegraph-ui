@@ -32,7 +32,21 @@ export default function ChatPanel() {
     const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(WS_URL, { shouldReconnect: (closeEvent) => true });
     const [loading, setLoading] = useState<boolean>(false);
     const [clientId, setClientID] = useState<string>('')
+    const [jsonBuffer, setJsonBuffer] = useState<Record<string, string>>({});
+    const phrases = [
+        "🧠 Thinking about your query...",
+        "🔍 Searching relevant nodes...",
+        "🌐 Traversing graph (BFS)...",
+    ];
+    const [currentIndex, setCurrentIndex] = useState(0);
 
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentIndex((prev) => (prev + 1) % phrases.length);
+        }, 1200); // change speed here
+
+        return () => clearInterval(interval);
+    }, []);
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatHistory, loading]);
@@ -115,9 +129,40 @@ export default function ChatPanel() {
             if(data == "done"){
                 return;
             }
-            const ragResult: IRagResult = typeof data === "string"
-                ? { answer: data }
-                : data;
+
+            setJsonBuffer(prev => ({
+                ...prev,
+                [messageId]: (prev[messageId] || "") + data
+            }));
+
+            return;
+
+        }
+
+        // 4️⃣ Stream completed
+        if (type === "GRAPHRAG_DONE") {
+                const cleanAnswer = jsonBuffer[messageId]
+                    .replace(/^ANSWER[:\s-]*/i, "")
+                    .trim();
+            // const fullData = jsonBuffer[messageId];
+
+            if (!cleanAnswer) {
+                console.warn("No data to parse");
+                return;
+            }
+
+            let ragResult: IRagResult;
+
+            try {
+                ragResult = JSON.parse(cleanAnswer);
+            } catch (err) {
+                console.error("Final JSON parse failed:", err);
+
+                // Optional fallback (extract something useful)
+                ragResult = {
+                    answer: cleanAnswer // raw fallback
+                } as IRagResult;
+            }
 
             // Attach final RAG result
             dispatch(attach_Rag_To_Message({
@@ -125,24 +170,26 @@ export default function ChatPanel() {
                 ragResult
             }));
 
-            // Replace content in assistant message
-            const answerText = ragResult.answer || JSON.stringify(ragResult, null, 2);
+            const answerText =
+                ragResult.answer || JSON.stringify(ragResult, null, 2);
+
             dispatch(add_Chat_Message({
                 timestamp: new Date().toISOString(),
                 id: messageId,
                 role: "assistant",
                 content: answerText
             }));
+
             dispatch(set_Active_Message(messageId));
-
-            return;
-        }
-
-        // 4️⃣ Stream completed
-        if (type === "GRAPHRAG_DONE") {
             dispatch(set_Loading(false));
-            // dispatch(set_Active_Message(messageId));
             setLoading(false);
+
+            // cleanup buffer
+            setJsonBuffer(prev => {
+                const copy = { ...prev };
+                delete copy[messageId];
+                return copy;
+            });
 
             return;
         }
@@ -186,7 +233,7 @@ export default function ChatPanel() {
                         }`}
                     >
                         <div
-                            className={`max-w-[65%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                            className={`max-w-[60%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                                 msg.role === "user"
                                     ? "text-white rounded-br-md"
                                     : "bg-gray-100 text-gray-800 rounded-bl-md"
@@ -227,10 +274,11 @@ export default function ChatPanel() {
                 {loading && (
                     <div className="flex justify-start">
                         <div className="bg-gray-100 text-gray-500 px-4 py-3 rounded-2xl rounded-bl-md text-sm animate-pulse">
-                            Thinking...
+                            {currentIndex}
                         </div>
                     </div>
                 )}
+
 
                 <div ref={bottomRef} />
             </div>

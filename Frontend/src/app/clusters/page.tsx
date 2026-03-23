@@ -13,7 +13,7 @@ limitations under the License.
 
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Button, Divider, Layout, message, Modal, theme, Typography, Form } from "antd";
+import {Button, Divider, Layout, message, Modal, theme, Typography, Form, Spin} from "antd";
 import PageWrapper from "@/layouts/page-wrapper";
 import { Input } from "antd";
 import type { SearchProps } from "antd/es/input/Search";
@@ -26,6 +26,7 @@ import { getAllClusters, getClustersStatusByIds } from "@/services/cluster-servi
 import { useAppSelector } from "@/redux/hook";
 import ClusterRegistrationForm from "@/components/cluster-details/cluster-registration-form";
 import useAccessToken from '@/hooks/useAccessToken';
+import {LoadingOutlined} from "@ant-design/icons";
 
 const { Search } = Input;
 const { Content } = Layout;
@@ -39,7 +40,7 @@ export default function Clusters() {
   const { userData } = useAppSelector((state) => state.authData);
   const [clusters, setClusters] = useState<IClusterDetails[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<IClusterDetails[]>([]);
-
+  const [loading, setLoading] = useState<boolean>(true)
   const { selectedCluster } = useAppSelector((state) => state.clusterData);
 
   const [openModal, setOpenModal] = useState<boolean>(false);
@@ -64,6 +65,7 @@ export default function Clusters() {
       });
 
       setClusters(clustersWithStatus);
+      setLoading(false);
     } catch (err) {
       message.error("Failed to fetch JasmineGraph clusters");
       console.error(err);
@@ -136,9 +138,21 @@ export default function Clusters() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
+            <Spin
+                spinning={loading}
+                fullscreen
+                indicator={<LoadingOutlined spin style={{ fontSize: 48 }} />}
+                tip={
+                  <div style={{ marginTop: 12, fontSize: 16 }}>
+                    Fetching data from server<br />
+                    Please wait, this may take a few moments.
+                  </div>
+                }
+            />
             <Typography>
               <Title level={2}>My Clusters</Title>
             </Typography>
+
             <div style={{gap: "10px", display: "flex"}}>
               <Search
                 placeholder="search..."

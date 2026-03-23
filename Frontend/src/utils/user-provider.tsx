@@ -50,7 +50,7 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
       router.replace("/auth");
-      message.error("An error occurred while fetching user data");
+      // message.error("An error occurred while fetching user data");
     } finally {
       setIsLoading(false);
     }

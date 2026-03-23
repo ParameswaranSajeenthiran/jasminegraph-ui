@@ -51,7 +51,7 @@ const Auth = () => {
         setShowSetupBackendAlert(true);
       }
     }catch(err){
-      message.error("Failed to ping backend");
+      // message.error("Failed to ping backend");
     }
   };
 

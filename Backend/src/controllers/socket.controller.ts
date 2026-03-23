@@ -417,30 +417,23 @@ const streamGraphRAG = async (
 
                             let parsed: any = msg;
 
-                            try {
-                                const cleanAnswer = msg
-                                    .replace(/^ANSWER[:\s-]*/i, "")
-                                    .trim();
-
-                                parsed = JSON.parse(cleanAnswer);
-                            } catch {
-                                parsed = { message: msg };
-                            }
+                            // try {
+                            //     const cleanAnswer = msg
+                            //         .replace(/^ANSWER[:\s-]*/i, "")
+                            //         .trim();
+                            //
+                            //     parsed = JSON.parse(cleanAnswer);
+                            // } catch {
+                            //     parsed = { message: msg };
+                            // }
 
                             sendToClient(clientId, {
                                 type: "GRAPHRAG_RESULT",
                                 messageId: payload.messageId,
-                                data: parsed
+                                data: msg
                             });
 
-                            sendToClient(clientId, {
-                                type: "GRAPHRAG_DONE",
-                                messageId: payload.messageId
-                            });
-                            answered = true;
-                            tSocket.write("exit\n");
-                            // clearTimeout(timeout);
-                            resolve();
+
                         }
 
                         /* 8. Fatal Errors */
@@ -468,6 +461,14 @@ const streamGraphRAG = async (
                                     error: "Sorry, Something went wrong"
                                 });
                             }
+                            sendToClient(clientId, {
+                                type: "GRAPHRAG_DONE",
+                                messageId: payload.messageId
+                            });
+                            answered = true;
+                            tSocket.write("exit\n");
+                            // clearTimeout(timeout);
+                            resolve();
 
 
                         }
@@ -476,9 +477,9 @@ const streamGraphRAG = async (
                         else {
 
                             sendToClient(clientId, {
-                                type: "GRAPHRAG_STREAM",
+                                type: "GRAPHRAG_RESULT",
                                 messageId: payload.messageId,
-                                data: { message: msg }
+                                data: msg
                             });
                         }
                     });
@@ -486,10 +487,10 @@ const streamGraphRAG = async (
                     tSocket.on("end", () => {
                         console.log(`GraphRAG telnet ended for ${clientId}`);
 
-                        sendToClient(clientId, {
-                            type: "GRAPHRAG_DONE",
-                            messageId: payload.messageId
-                        });
+                        // sendToClient(clientId, {
+                        //     type: "GRAPHRAG_DONE",
+                        //     messageId: payload.messageId
+                        // });
 
                         // clearTimeout(timeout);
                         resolve();

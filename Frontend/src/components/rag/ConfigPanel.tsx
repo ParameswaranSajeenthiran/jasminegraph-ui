@@ -161,9 +161,11 @@ export default function ConfigPanel() {
                                 setModels([]);
                             }}
                             options={[
+
                                 { label: "OpenAI", value: "openai" },
-                                { label: "vLLM", value: "vllm" },
+
                                 { label: "Ollama", value: "ollama" },
+                                { label: "vLLM", value: "vllm" },
                             ]}
                         />
 
@@ -175,7 +177,7 @@ export default function ConfigPanel() {
                                         selectedProvider === "openai"
                                             ? "https://api.openai.com"
                                             : selectedProvider === "vllm"
-                                                ? "http://localhost:8000"
+                                                ? "http://10.8.100.24:6578"
                                                 : "http://localhost:11434"
                                     }
                                     value={providerURL ?? ""}
@@ -210,8 +212,10 @@ export default function ConfigPanel() {
                                 style={{ width: "100%" }}
                                 value={selectedModel ?? undefined}
                                 placeholder="Select Model"
-                                onChange={(value) =>
+                                onChange={(value) =>{
                                     dispatch(set_Selected_Model(value))
+                                    dispatch(set_Config_Collapsed(!configCollapsed))
+                                }
                                 }
                                 options={models.map((m) => ({
                                     label: m,

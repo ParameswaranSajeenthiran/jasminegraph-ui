@@ -162,7 +162,12 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
             const graph = new Graph({multi: true, type: "directed"});
             graphRef.current = graph;
 
-            const renderer = new Sigma(graph, containerRef.current, {renderLabels: true, renderEdgeLabels: true});
+            const renderer = new Sigma(graph, containerRef.current, {renderLabels: true, renderEdgeLabels: true,
+                defaultEdgeType: "arrow",
+                edgeLabelColor: {
+                    color: "#000",      // ✅ solid black text
+                }
+                  });
             rendererRef.current = renderer;
 
             // Click selects node
@@ -236,7 +241,11 @@ const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Pro
                 setHoveredNode(null);
             });
 
-
+            renderer.on("clickStage", () => {
+                resetGraphVisibility();
+                setSelectedNodeId(null);
+                setIsFiltered(false);
+            });
 
 
             renderer.on("enterEdge", ({edge}) => {
