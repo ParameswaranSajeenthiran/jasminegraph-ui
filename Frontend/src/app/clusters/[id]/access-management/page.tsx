@@ -100,9 +100,9 @@ export default function AccessManagement({ params }: { params: { id: string } })
   const getTableData = () => {
     return clusterUsers.map((data) => {
       return {
-        key: data._id,
-        userID: data._id,
-        Name: data.fullName,
+        key: data.id,
+        userID: data.id,
+        Name: data.firstName + " " + data.lastName,
         Email: data.email,
         Role: data.role,
         Status: data.enabled,
@@ -111,10 +111,10 @@ export default function AccessManagement({ params }: { params: { id: string } })
   }
 
   const handleUserAdd = async (userID: string) => {
-    const user = userData.find((user) => user._id == userID)
+    const user = userData.find((user) => user.id == userID)
     setClusterUsers([...clusterUsers, user!])
     try{
-      const res = await addUserToCluster(userID, clusterDetails!._id);
+      const res = await addUserToCluster(userID, String(clusterDetails!.id));
       if(res.data){
         console.log("User added successfully")
       }
@@ -124,9 +124,9 @@ export default function AccessManagement({ params }: { params: { id: string } })
   }
 
   const handleUserRemove = async (userID: string) => {
-    setClusterUsers(clusterUsers.filter((user) => user._id !== userID))
+    setClusterUsers(clusterUsers.filter((user) => user.id !== userID))
     try{
-      const res = await removeUserFromCluster(userID, clusterDetails!._id);
+      const res = await removeUserFromCluster(userID, String(clusterDetails!.id));
       if(res.data){
         console.log("User removed successfully (id: ", userID, ")")
       }
@@ -156,10 +156,11 @@ export default function AccessManagement({ params }: { params: { id: string } })
 
   const handleSearch = (value: string) => {
     setOptions(() => {
-      const filteredUsers = userData.filter((user) => 
-                        user.fullName.toLowerCase().includes(value.toLowerCase()) || 
+      const filteredUsers = userData.filter((user) =>
+                        user.firstName.toLowerCase().includes(value.toLowerCase()) ||
+                        user.lastName.toLowerCase().includes(value.toLowerCase()) ||
                         user.email.toLowerCase().includes(value.toLowerCase()));
-      return filteredUsers.map((user) => (renderItem(user.email, user._id)));
+      return filteredUsers.map((user) => (renderItem(user.email, user.id)));
     });
   };
 
@@ -196,13 +197,13 @@ export default function AccessManagement({ params }: { params: { id: string } })
 
   useEffect(()=>{
     if(clusterDetails){
-      const clusterOwner = userData.find((user) => user._id === clusterDetails.clusterOwner);
+      const clusterOwner = userData.find((user) => user.id === clusterDetails.cluster_owner);
       let users: IUserAccessData[] = [];
       if(clusterOwner){
         users.push(clusterOwner);
       }
       userData.forEach((user) => {
-        if(clusterDetails.userIDs.includes(user._id)){
+        if(clusterDetails.user_ids.includes(user.id)){
           users.push(user);
         }
       })

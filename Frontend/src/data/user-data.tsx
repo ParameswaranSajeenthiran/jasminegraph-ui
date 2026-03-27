@@ -15,11 +15,11 @@ import { ISelectProp, IUserAccessData } from "@/types/user-types";
 
 export const USER_ROLES: ISelectProp[] = [
   {
-    value: 'Admin',
+    value: 'admin',
     label: 'Admin',
   },
   {
-    value: 'Viewer',
+    value: 'viewer',
     label: 'Viewer',
   }
 ];

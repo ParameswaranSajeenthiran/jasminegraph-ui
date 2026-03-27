@@ -84,7 +84,7 @@ export default function ClusterDetails({ params }: { params: { id: string } }) {
     {
       key: '1',
       label: 'Cluster ID',
-      children: clusterDetails?._id || "-",
+      children: clusterDetails?.id || "-",
     },
     {
       key: '2',

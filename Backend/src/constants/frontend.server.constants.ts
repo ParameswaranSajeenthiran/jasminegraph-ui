@@ -18,6 +18,12 @@ export const TRIANGLE_COUNT_COMMAND = 'trian';
 export const GRAPH_DATA_COMMAND = "graphv";
 export const CYPHER_AST_COMMAND = "cypher-ast";
 export const CYPHER_COMMAND = "cypher";
+export const SEMANTIC_BEAM_SEARCH_COMMAND = "sbs";
+
 export const INDEGREE_COMMAND = "idd";
 export const OUTDEGREE_COMMAND = "odd";
 export const PROPERTIES_COMMAND = "prp";
+export const UPLOAD_FROM_HDFS = "adhdfs";
+export const CONSTRUCT_KG_COMMAND = "constructkg";
+export const CONSTRUCT_KG_COMMAND_LOCAL = "constructkgl";
+export const STOP_CONSTRUCT_KG_COMMAND = "stop-constructkg";

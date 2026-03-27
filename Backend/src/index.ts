@@ -14,15 +14,16 @@ limitations under the License.
 import express from 'express';
 import dotenv from 'dotenv';
 import http from 'http';
-import mongoose from 'mongoose';
+import path from "path";
 
 import { connectToDatabase } from './databaseConnection';
+import { pool } from './databaseConnection';
 import { userRoute } from './routes/user.routes';
 import { authRoute } from './routes/auth.routes';
 import { queryRoute } from './routes/query.routes';
 import { clusterRoute } from './routes/cluster.routes';
 import { graphRoute } from './routes/graph.routes';
-import authMiddleware from './middleware/auth.middleware';
+import { keycloakAuthMiddleware } from './middleware/keycloak.middleware';
 import clusterMiddleware from './middleware/cluster.middleware';
 import { setupWebSocket } from './controllers/socket.controller';
 
@@ -32,7 +33,7 @@ const HOST = process.env.HOST || 'http://backend';
 const LOCAL_HOST = 'http://localhost';
 const PORT = parseInt(process.env.PORT || '8080');
 
-console.log('MONGO:', process.env.MONGO_URL);
+console.log('POSTGRES_URL:', process.env.POSTGRES_URL);
 
 const app = express();
 
@@ -41,14 +42,17 @@ const server = http.createServer(app);
 
 setupWebSocket(server);
 
-app.use('/public', express.static('public'));
+const CACHE_DIR = path.resolve("/app/caches");
+
+app.use('/public', express.static(CACHE_DIR));
+// app.use('/public', express.static('public'));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use('/auth', authRoute());
 app.use('/users', userRoute());
-app.use('/clusters', authMiddleware, clusterRoute());
+app.use('/clusters', keycloakAuthMiddleware, clusterRoute());
 app.use('/graph', clusterMiddleware, graphRoute());
 app.use('/query', clusterMiddleware, queryRoute());
 
@@ -59,24 +63,21 @@ app.get('/ping', (req, res) => {
 
 app.get('/health', async (req, res) => {
   try {
-    // Check DB connection state using mongoose
-    const dbState = mongoose.connection.readyState;
-    // 1 = connected, 2 = connecting, 0 = disconnected, 3 = disconnecting
-    if (dbState === 1) {
-      return res.status(200).json({ status: 'ok', db: 'connected' });
-    } else {
-      return res.status(503).json({ status: 'error', db: 'not connected' });
-    }
+    await pool.query('SELECT 1'); // simple test query
+    return res.status(200).json({ status: 'ok', db: 'connected' });
   } catch (err: any) {
-    return res.status(500).json({ status: 'error', error: err.message });
+    return res.status(503).json({ status: 'error', db: 'not connected', error: err.message });
   }
 });
 
-// Bind to '0.0.0.0' to make the service accessible from all network interfaces.
-server.listen(PORT, '0.0.0.0', async () => {
+const startServer = async () => {
   await connectToDatabase();
 
-  console.log(`Application started on URL ${HOST}:${PORT} (for Docker containers) 🎉`);
-  console.log(`Access backend on your machine at ${LOCAL_HOST}:${PORT}`);
-  console.log(`WebSocket server is available at ws://${LOCAL_HOST}:${PORT} (host) and ws://${HOST}:${PORT} (containers)`);
-});
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Application started on URL ${HOST}:${PORT} (for Docker containers) 🎉`);
+    console.log(`Access backend on your machine at ${LOCAL_HOST}:${PORT}`);
+    console.log(`WebSocket server is available at ws://${LOCAL_HOST}:${PORT} (host) and ws://${HOST}:${PORT} (containers)`);
+  });
+};
+
+startServer();

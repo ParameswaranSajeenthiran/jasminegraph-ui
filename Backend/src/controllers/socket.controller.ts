@@ -17,9 +17,14 @@ import readline from 'readline';
 import WebSocket from 'ws';
 import { HTTP, TIMEOUT } from '../constants/constants';
 import { ErrorCode, ErrorMsg } from '../constants/error.constants';
-import { CYPHER_AST_COMMAND, CYPHER_COMMAND, INDEGREE_COMMAND, OUTDEGREE_COMMAND } from '../constants/frontend.server.constants';
+import {
+    CYPHER_COMMAND,
+    INDEGREE_COMMAND,
+    OUTDEGREE_COMMAND,
+    SEMANTIC_BEAM_SEARCH_COMMAND
+} from '../constants/frontend.server.constants';
 import { getClusterDetails, IConnection, telnetConnection } from "./graph.controller";
-import { Cluster } from '../models/cluster.model';
+import { getClusterByIdRepo } from '../repository/cluster.repository';
 
 let clients: Map<string, WebSocket> = new Map(); // Map of client IDs to WebSocket connections
 
@@ -41,7 +46,6 @@ export const setupWebSocket = (server: any) => {
 
     ws.on('message', (message) => {
       const data = JSON.parse(message.toString());
-
       // Handle messages from clients
       if (data.type === 'REQUEST_GRAPH') {
         streamGraphVisualization(data.clientId, data.graphFilePath);
@@ -50,7 +54,17 @@ export const setupWebSocket = (server: any) => {
       if (data.type === 'QUERY') {
         streamQueryResult(data.clientId, data.clusterId, data.graphId, data.query);
       }
+        if (data.type === 'SBS') {
+            semanticBeamSearch(data.clientId, data.clusterId, data.graphId, data.query);
+        }
 
+        if (data.type === 'UPBYTES') {
+            streamUploadBytes(data.clientId, data.clusterId, data.graphIds);
+        }
+
+        if (data.type === 'STOP') {
+            stopStream(data.clientId, data.clusterId);
+        }
       if (data.type === "GRAPH_DEGREE") {
         getDegreeData(data.clientId, data.clusterId, data.graphId, data.degree_type)
       }
@@ -62,8 +76,8 @@ export const sendToClient = (clientId, data) => {
   const client = clients.get(clientId);
   if (client && client.readyState === WebSocket.OPEN) {
     client.send(JSON.stringify(data));
-    console.log(`Sent data to client ${clientId}:`, data);
   } else {
+      clients.delete(clientId);
     console.error(`Client ${clientId} not connected or WebSocket not open.`);
   }
 };
@@ -105,8 +119,8 @@ const streamGraphVisualization = async (clientId: string, filePath: string) => {
   }
 };
 
-const streamQueryResult = async (clientId: string, clusterId:string, graphId:string, query: string) => {  
-  const cluster = await Cluster.findOne({ _id: clusterId });
+const streamQueryResult = async (clientId: string, clusterId:string, graphId:string, query: string) => {
+    const cluster = await getClusterByIdRepo(Number(clusterId));
   if (!(cluster?.host || cluster?.port)) {
     sendToClient(clientId, { Error: "cluster not found"})
     return
@@ -125,25 +139,27 @@ const streamQueryResult = async (clientId: string, clusterId:string, graphId:str
     while(true){
       if(sharedBuffer.length > 0){
         remaining += sharedBuffer.shift()!
-        
+
         let splitIndex;
 
         if(remaining.trim() == '-1'){
+            sendToClient(clientId, {"done":"true"})
           console.log("Termination signal received. Closing Telnet connection.");
           return
         }
-        
+
         // Extract complete JSON objects from the buffer
         while ((splitIndex = remaining.indexOf('\n')) !== -1) {
           const jsonString = remaining.slice(0, splitIndex).trim(); // Extract a complete object
           remaining = remaining.slice(splitIndex + 1); // Remove processed part
-          
+
           if (jsonString) {
             if (jsonString == "-1") {
               console.log("Termination signal received. Closing Telnet connection.");
+                sendToClient(clientId, {"done":"true"})
               return; // Exit the producer loop
             }
-            
+
             try {
               const parsed = JSON.parse(jsonString); // Parse the JSON
               sendToClient(clientId, parsed)
@@ -155,6 +171,7 @@ const streamQueryResult = async (clientId: string, clusterId:string, graphId:str
 
           if(remaining.trim() == '-1' || jsonString == '-1'){
             console.log("Termination signal received. Closing Telnet connection.");
+              sendToClient(clientId, {"done":"true"})
             return
           }
         }
@@ -183,14 +200,256 @@ const streamQueryResult = async (clientId: string, clusterId:string, graphId:str
     return console.log({ code: ErrorCode.ServerError, message: ErrorMsg.ServerError, errorDetails: err });
   }
 }
+const semanticBeamSearch = async (clientId: string, clusterId:string, graphId:string, query: string) => {
+    const cluster = await getClusterByIdRepo(Number(clusterId));
+    if (!(cluster?.host || cluster?.port)) {
+        sendToClient(clientId, { Error: "cluster not found"})
+        return
+    }
+
+    const connection: IConnection = {
+        host: cluster.host,
+        port: cluster.port
+    }
+
+    let sharedBuffer: string[] = [];
+
+    const producer = async () => {
+        var remaining: string = '';
+
+        while(true){
+            if(sharedBuffer.length > 0){
+                remaining += sharedBuffer.shift()!
+
+                let splitIndex;
+
+                if(remaining.trim() == '-1'){
+                    console.log("Termination signal received. Closing Telnet connection.");
+                    return
+                }
+
+                // Extract complete JSON objects from the buffer
+                while ((splitIndex = remaining.indexOf('\n')) !== -1) {
+                    const jsonString = remaining.slice(0, splitIndex).trim(); // Extract a complete object
+                    remaining = remaining.slice(splitIndex + 1); // Remove processed part
+
+                    if (jsonString) {
+                        if (jsonString == "-1") {
+                            console.log("Termination signal received. Closing Telnet connection.");
+                            return; // Exit the producer loop
+                        }
+
+                        try {
+                            const parsed = JSON.parse(jsonString); // Parse the JSON
+                            sendToClient(clientId, parsed)
+                        } catch (error) {
+                            console.error('Error parsing JSON:', error, 'Data:', jsonString);
+                        }
+                    }
+
+
+                    if(remaining.trim() == '-1' || jsonString == '-1'){
+                        console.log("Termination signal received. Closing Telnet connection.");
+                        return
+                    }
+                }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, TIMEOUT.hundred));
+        }
+    }
+
+    try {
+        telnetConnection({host: connection.host, port: connection.port})((tSocket: any) => {
+            producer();
+
+            tSocket.on('data', (buffer) => {
+                sharedBuffer.push(buffer.toString('utf8'))
+            });
+
+            tSocket.on('end', () => {
+                console.log('Telnet connection ended');
+            });
+
+            // Write the command to the Telnet server
+            tSocket.write(SEMANTIC_BEAM_SEARCH_COMMAND + '|' + graphId + '|' + query + '\n', 'utf8');
+        });
+    } catch (err) {
+        return console.log({ code: ErrorCode.ServerError, message: ErrorMsg.ServerError, errorDetails: err });
+    }
+}
+
+
+const streamUploadBytes = async (clientId: string, clusterId: string, graphIds: string[]) => {
+    const cluster = await getClusterByIdRepo(Number(clusterId));
+    if (!(cluster?.host || cluster?.port)) {
+        sendToClient(clientId, { Error: "cluster not found" });
+        return;
+    }
+
+    const connection: IConnection = {
+        host: cluster.host,
+        port: cluster.port
+    };
+
+    let sharedBuffer: string[] = [];
+    let stopRequested = false; // flag to stop producer when client disconnects
+
+    const producer = async () => {
+        let remaining = '';
+
+        while (true) {
+            // 🛑 Check if client still connected
+            const client = clients.get(clientId);
+            if (!client || client.readyState !== WebSocket.OPEN || stopRequested) {
+                console.log(`Stopping UPBYTES producer for disconnected client: ${clientId}`);
+                return;
+            }
+
+            if (sharedBuffer.length > 0) {
+                remaining += sharedBuffer.shift()!;
+                let splitIndex;
+
+                while ((splitIndex = remaining.indexOf('\n')) !== -1) {
+                    const line = remaining.slice(0, splitIndex).trim();
+                    remaining = remaining.slice(splitIndex + 1);
+
+                    if (!line) continue;
+
+                    if (line === "-1") {
+                        console.log(`Termination signal received. Closing Telnet connection for ${clientId}.`);
+                        return;
+                    }
+
+                    if (line.startsWith("UPBYTES")) {
+                        const parts = line.split('|');
+                        const updates: {
+                            graphId: string;
+                            uploaded: number;
+                            total: number;
+                            percentage: number;
+                            bytesPerSecond: number;
+                            triplesPerSecond: number;
+                            startTime: string;
+                            uploadPath: string;
+                            llmRunnerString: string;
+                            inferenceEngine: string;
+                            model:string;
+                            chunkSize:number;
+                            kgConstructionStatus:string;
+                            hdfsIp:string;
+                            hdfsPort:string;
+
+                        }[] = [];
+                        for (let i = 1; i < parts.length; i += 14) {
+                            const graphId = parts[i];
+                            const uploaded = parseFloat(parts[i + 1] || "0");
+                            const total = parseFloat(parts[i + 2] || "0");
+                            const percentage = parseFloat(total > 0 ? ((uploaded / total) * 100).toFixed(5) : "0.00");
+                            const bytesPerSecond = parseFloat(parts[i + 4] || "0");
+                            const triplesPerSecond = parseFloat(parts[i + 5] || "0");
+                            const startTime = parts[i + 6];
+                            const uploadPath = parts[i + 7];
+                            const llmRunnerString  = parts[i+8];
+                            const inferenceEngine = parts[i+9];
+                            const model = parts[i+10];
+                            const chunkSize =parseInt(parts[i+11]);
+                            const kgConstructionStatus = parts[i+12];
+                            const hdfsIp = parts[i+13];
+                            const hdfsPort = parts[i+14];
+
+                            updates.push({ graphId, uploaded, total, percentage, bytesPerSecond, triplesPerSecond, startTime, uploadPath, llmRunnerString, inferenceEngine, model, chunkSize, kgConstructionStatus, hdfsIp, hdfsPort});
+                        }
+                        // Send updates only if still connected
+                        if (client.readyState === WebSocket.OPEN) {
+                            sendToClient(clientId, {
+                                type: "UPBYTES",
+                                updates,
+                                timestamp: Date.now(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+    };
+
+    try {
+        telnetConnection({ host: connection.host, port: connection.port })((tSocket: any) => {
+            producer();
+
+            tSocket.on('data', (buffer) => {
+                sharedBuffer.push(buffer.toString('utf8'));
+            });
+
+            tSocket.on('end', () => {
+                console.log(`Telnet connection ended for ${clientId}`);
+            });
+
+            // Handle cleanup if client disconnects
+            const client = clients.get(clientId);
+            if (client) {
+                client.on('close', () => {
+                    console.log(`Client ${clientId} disconnected — stopping UPBYTES stream.`);
+                    stopRequested = true;
+                    tSocket.end();
+                });
+                client.on('error', () => {
+                    console.log(`Client ${clientId} errored — stopping UPBYTES stream.`);
+                    stopRequested = true;
+                    tSocket.end();
+                });
+            }
+
+            // Build subscription command
+            const command = ['UPBYTES', ...graphIds].join('|');
+            tSocket.write(command + '\n', 'utf8');
+        });
+    } catch (err) {
+        console.error({ code: ErrorCode.ServerError, message: ErrorMsg.ServerError, errorDetails: err });
+    }
+};
+
+
+const stopStream = async (clientId: string, clusterId: string) => {
+    const cluster = await getClusterByIdRepo(Number(clusterId));
+    if (!(cluster?.host || cluster?.port)) {
+        sendToClient(clientId, { Error: "cluster not found"});
+        return;
+    }
+
+    const connection: IConnection = {
+        host: cluster.host,
+        port: cluster.port
+    };
+
+
+    try {
+        telnetConnection({ host: connection.host, port: connection.port })((tSocket: any) => {
+
+            tSocket.on('end', () => {
+                console.log('Telnet connection ended');
+            });
+
+            // Build subscription command
+            const command = 'STOP'
+            tSocket.write(command + '\n', 'utf8');
+        });
+    } catch (err) {
+        console.error({ code: ErrorCode.ServerError, message: ErrorMsg.ServerError, errorDetails: err });
+    }
+};
+
 
 const getDegreeData = async (clientId: string, clusterId:string, graphId:string, type: string) => {
   const COMMAND = type == "in_degree" ? INDEGREE_COMMAND : type == "out_degree" ? OUTDEGREE_COMMAND : INDEGREE_COMMAND;   
   
-  const cluster = await Cluster.findOne({ _id: clusterId });
-  if (!(cluster?.host || cluster?.port)) {
-    sendToClient(clientId, { Error: "cluster not found"})
-    return
+  const cluster = await getClusterByIdRepo(Number(clusterId));
+  if (!cluster || !cluster.host || !cluster.port) {
+    sendToClient(clientId, { Error: "cluster not found" })
+    return;
   }
 
   const connection: IConnection = {

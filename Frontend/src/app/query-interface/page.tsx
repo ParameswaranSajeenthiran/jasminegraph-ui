@@ -44,18 +44,24 @@ export default function Query() {
 
   const getGraphsData = async () => {
     try{
+        setLoading(true);
     const res = await getGraphList();
     if(res.data){
+
       const filteredData: IOption[] = res.data.map((graph: any) => {
         return {
           value: graph.idgraph,
           label: graph.name,
         }
       })
-      setGraphs(filteredData);
+        setLoading(false);
+
+        setGraphs(filteredData);
     }
     }catch(err){
-      message.error("Failed to fetch graphs: " + err);
+        setLoading(false);
+
+        message.error("Failed to fetch graphs: " + err);
     }
   }
 

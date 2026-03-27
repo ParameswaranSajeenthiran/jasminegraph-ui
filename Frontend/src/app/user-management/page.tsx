@@ -16,7 +16,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
 import Highlighter from 'react-highlight-words';
-import { Tag, Button, Modal, Input, Space, Table, Layout, theme, Typography, message } from 'antd';
+import { Tag, Button, Modal, Input, Space, Table, Layout, theme, message, Form } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { TableProps, PaginationProps } from 'antd';
 import type { InputRef, TableColumnType } from 'antd';
@@ -27,6 +27,7 @@ import { useAppSelector } from "@/redux/hook";
 import { IUserAccessData } from "@/types/user-types";
 import { getAllUsers } from "@/services/user-service";
 import { set_Users_Cache } from "@/redux/features/cacheSlice";
+import form from "antd/es/form";
 
 const { Content } = Layout;
 
@@ -61,29 +62,23 @@ export default function Clusters() {
   const [searchText, setSearchText] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
   const searchInput = useRef<InputRef>(null);
+  const [form] = Form.useForm();
 
   const showModal = () => {
     setOpenModal(true);
-  };
-
-  const handleOk = (e: React.MouseEvent<HTMLElement>) => {
-    setOpenModal(false);
-  };
-
-  const handleCancel = (e: React.MouseEvent<HTMLElement>) => {
-    setOpenModal(false);
+    form.resetFields();
   };
 
   useEffect(() => {
     console.log(userData)
-}, [userData])
+  }, [userData])
 
   const getTableData = () => {
     return userData.map((data) => {
       return {
-        key: data._id,
-        userID: data._id,
-        name: data.fullName,
+        key: data.id,
+        userID: data.id,
+        name: data.firstName + " " + data.lastName,
         email: data.email,
         role: data.role,
         status: data.enabled,
@@ -229,8 +224,16 @@ export default function Clusters() {
     try{
       const res = await getAllUsers();
       if(res.data){
-        setUserData(res.data)
-        dispatch(set_Users_Cache(res.data))
+        const mappedUsers: IUserAccessData[] = res.data.map((user: any) => ({
+          _id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          enabled: user.enabled,
+        }));
+        setUserData(mappedUsers)
+        dispatch(set_Users_Cache(mappedUsers))
       }
     }catch(err){
       message.error("Failed to fetch user data")
@@ -266,7 +269,7 @@ export default function Clusters() {
             footer={<></>}
             onCancel={() => setOpenModal(false)}
           >
-            <UserRegistrationForm onSuccess={afterUserRegistration}/>
+            <UserRegistrationForm form={form} onSuccess={afterUserRegistration} />
           </Modal>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
             <div style={{marginBottom: "20px"}}>

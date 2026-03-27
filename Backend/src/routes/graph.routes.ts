@@ -12,21 +12,82 @@ limitations under the License.
  */
 
 import { Router } from 'express';
-import { getGraphList, uploadGraph, removeGraph, triangleCount, getGraphVisualization, getGraphData, getClusterProperties } from '../controllers/graph.controller';
+import {
+    getGraphList, uploadGraph, removeGraph, triangleCount, getGraphVisualization, getGraphData, getClusterProperties,
+    getDataFromHadoop, constructKG, stopConstructKG,
+    updateKGConstructionMetaByClusterId, getKGConstructionMetaByGraphId, getOnProgressKGConstructionMeta, validateHDFS,
+    constructKGTXT
+} from '../controllers/graph.controller';
 import multer from 'multer';
 import path from 'path';
+import fs from "fs";
+import pdfParse from "pdf-parse";
+import { Request, Response } from 'express';
+import net from "net";
+import axios from 'axios';
+// --------------------
+// Cache directory (single source of truth)
+// --------------------
+const CACHE_DIR = path.resolve("/app/caches");
 
+// Ensure directory exists at startup
+fs.mkdirSync(CACHE_DIR, { recursive: true });
+
+// Use same dir everywhere
+const UPLOAD_DIR = CACHE_DIR;
+
+const HadoopIp = "192.168.1.19";
+const HDFS_NAMENODE = "http://192.168.1.19:9870"; // change if remote
+const HDFS_BASE_PATH = "/user/jasminegraph/extracted_texts";
+
+const uploadTextToHDFS = async (filename: string, content: string) => {
+    const hdfsPath = `${HDFS_BASE_PATH}/${filename}`;
+
+    // Step 1: Request HDFS to create file (redirect expected)
+    const createUrl = `${HDFS_NAMENODE}/webhdfs/v1${hdfsPath}?op=CREATE&overwrite=true`;
+
+    const response = await axios.put(createUrl, null, {
+        maxRedirects: 0,
+        validateStatus: (status) => status === 307
+    });
+
+    // Step 2: Upload data to redirected DataNode
+    const dataNodeUrlRaw = response.headers.location;
+
+// Replace only the hostname part
+    const dataNodeUrl = dataNodeUrlRaw.replace(
+        /\/\/[^:/]+/,
+        `//${process.env.HDFS_DATANODE_IP ||HadoopIp}`
+    );
+
+    await axios.put(dataNodeUrl, content, {
+        headers: {
+            "Content-Type": "application/octet-stream"
+        }
+    });
+
+    console.log(`Uploaded to HDFS: ${hdfsPath}`);
+};
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'app/caches/'); // Specify the folder to save files
+    cb(null, '/app/caches/'); // Specify the folder to save files
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname)); // Save file with a unique name
   }
 });
-
+const fileStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, '/app/caches/'); // Specify the folder to save files
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname)); // Save file with a unique name
+    }
+});
 const upload = multer({ storage: storage });
+const upload_file = multer({ storage: fileStorage });
+
 
 const graphRoute = () => {
   const router = Router();
@@ -37,7 +98,15 @@ const graphRoute = () => {
   router.post('/analyze/trianglecount', triangleCount)
   router.get('/visualize', getGraphVisualization);
   router.get('/data', getGraphData)
-  router.get('/info', getClusterProperties);
+  router.get('/info', getClusterProperties)
+    router.get('/hadoop', getDataFromHadoop);
+  router.post('/hadoop/validate-file', validateHDFS)
+    router.post('/hadoop/construct-kg', constructKG);
+    router.post('/hadoop/stop-construct-kg', stopConstructKG);
+    router.post('/construct-kg-local',upload_file.single("file"),constructKGTXT);
+    router.get('/construct-kg-meta', getKGConstructionMetaByGraphId);
+    router.get('/construct-kg-meta/progress', getOnProgressKGConstructionMeta);
+    router.put('/construct-kg-meta', updateKGConstructionMetaByClusterId);
 
   return router;
 };

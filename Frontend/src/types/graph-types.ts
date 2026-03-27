@@ -30,3 +30,27 @@ export interface IGraphPartitionDetails {
   idpartition: number;
   vertexcount: number;
 }
+
+export interface IKnowledgeGraph {
+    _id: string,
+    graphId:string,
+    name: string,
+    status: string,
+    "hdfsIp": string,
+    "hdfsPort": string,
+    "hdfsFilePath": string,
+    "llmRunnerString": string,
+    "inferenceEngine": string,
+    "model": string,
+    "chunkSize": number,
+    "bytesPerSecond": number,
+    "triplesPerSecond": number,
+    total: number;
+    percentage: number;
+    startTime: string;
+    uploadPath: string;
+    kgConstructionStatus:string;
+    uploaded:number
+
+
+}

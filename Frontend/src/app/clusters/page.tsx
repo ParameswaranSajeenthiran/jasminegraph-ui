@@ -12,8 +12,8 @@ limitations under the License.
  */
 
 "use client";
-import React, { useState, useEffect, use } from "react";
-import { Button, Divider, Layout, message, Modal, theme, Typography } from "antd";
+import React, { useState, useEffect, useCallback } from "react";
+import { Button, Divider, Layout, message, Modal, theme, Typography, Form } from "antd";
 import PageWrapper from "@/layouts/page-wrapper";
 import { Input } from "antd";
 import type { SearchProps } from "antd/es/input/Search";
@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { IClusterDetails } from "@/types/cluster-types";
 import { useDispatch } from "react-redux";
 import { set_Selected_Cluster } from "@/redux/features/clusterData";
-import { getAllClusters } from "@/services/cluster-service";
+import { getAllClusters, getClustersStatusByIds } from "@/services/cluster-service";
 import { useAppSelector } from "@/redux/hook";
 import ClusterRegistrationForm from "@/components/cluster-details/cluster-registration-form";
 import useAccessToken from '@/hooks/useAccessToken';
@@ -44,37 +44,57 @@ export default function Clusters() {
 
   const [openModal, setOpenModal] = useState<boolean>(false);
   const { getSrvAccessToken } = useAccessToken();
+  const [form] = Form.useForm();
 
-  const getAllCluster = async () => {
-    try{
+  const getAllCluster = useCallback(async () => {
+    try {
       const token = getSrvAccessToken() || "";
-      const res = await getAllClusters(userData._id, token);
-    if(res.data){
-      setClusters(res.data)
-    }
-    }catch(err){
+      const clusterRes = await getAllClusters(token);
+      if (!clusterRes.data) return;
+
+      const clusters = clusterRes.data;
+
+      const clusterIds = clusters.map((c: any) => c.id);
+      const statusRes = await getClustersStatusByIds(token, clusterIds);
+      const statuses = statusRes.clusters || [];
+
+      const clustersWithStatus = clusters.map((c: any) => {
+        const status = statuses.find((s: any) => s.id === c.id)?.connected ?? false;
+        return { ...c, status };
+      });
+
+      setClusters(clustersWithStatus);
+    } catch (err) {
       message.error("Failed to fetch JasmineGraph clusters");
+      console.error(err);
     }
-  }
+  }, [getSrvAccessToken]);
 
-  const setSelecterCluster = () => {
-    if(localStorage.getItem("selectedCluster")){
-      const selectedCluster = clusters.find((cluster) => cluster._id == localStorage.getItem("selectedCluster"));
-      if(selectedCluster)
-      dispatch(set_Selected_Cluster(selectedCluster));
+  const setSelectedCluster = useCallback(() => {
+    const selectedClusterId = localStorage.getItem("selectedCluster");
+    if (selectedClusterId) {
+      const foundCluster = clusters.find((cluster) => String(cluster.id) === selectedClusterId);
+      if (foundCluster && foundCluster.id === selectedCluster?.id) {
+        return;
+      }
+      if (foundCluster) {
+        dispatch(set_Selected_Cluster(foundCluster));
+      }
     }
-  }
+  }, [clusters, selectedCluster, dispatch]);
+
 
   useEffect(() => {
-    setSelecterCluster();
-  }, [clusters])
+    setSelectedCluster();
+  }, [clusters, setSelectedCluster]);
 
 
   useEffect(() => {
-    if(userData._id){
+    if (userData.email && clusters.length === 0) {
       getAllCluster();
     }
-  }, [])
+  }, [getAllCluster, userData.email, clusters.length]);
+
 
   const onSearch: SearchProps["onSearch"] = (value, _e, info) => {
     const filteredClusters = clusters.filter((cluster) => {
@@ -84,15 +104,16 @@ export default function Clusters() {
   }
 
   const handleOnClusterSelect = (cluster: IClusterDetails) => {
-    dispatch(set_Selected_Cluster(cluster))
-    localStorage.setItem("selectedCluster", cluster._id);
+    dispatch(set_Selected_Cluster(cluster));
+    localStorage.setItem("selectedCluster", String(cluster.id));
   }
 
   const handleOnClusterClick = (cluster: IClusterDetails) => {
-    router.push(`/clusters/${cluster._id}`)
+    router.push(`/clusters/${cluster.id}`);
   }
 
   const showModal = () => {
+    form.resetFields();
     setOpenModal(true);
   }
 
@@ -128,12 +149,12 @@ export default function Clusters() {
               />
               <Button size="large" onClick={showModal}>Add New Cluster</Button>
               <Modal
-                title="Connect New Cluster"
+                title="Add New Cluster"
                 open={openModal}
                 footer={<></>}
                 onCancel={() => setOpenModal(false)}
               >
-                <ClusterRegistrationForm onSuccess={afterClusterRegistration}/>
+                <ClusterRegistrationForm form={form} onSuccess={afterClusterRegistration} onCancel={() => setOpenModal(false)} />
               </Modal>
             </div>
           </div>
@@ -141,31 +162,48 @@ export default function Clusters() {
             <>
               <Divider>Selected Cluster</Divider>
               <Col>
-                  <Row key={selectedCluster._id}>
-                    <Card hoverable style={{width: "100%", marginBottom: "20px", border: "1px solid gray"}}
+                <Row key={selectedCluster.id}>
+                  <Card 
+                    hoverable 
+                    style={{ width: "100%", marginBottom: "20px", border: "1px solid gray" }}
                     onClick={() => handleOnClusterClick(selectedCluster)}
-                    >
-                      <Typography>
-                        <Title level={3}>{selectedCluster.name}</Title>
-                        <div style={{display: "flex", justifyContent: "space-between"}}>
-                          <Text>
-                            Cluster ID: {selectedCluster._id}
-                          </Text>
-                          <Text>Creation Date: {selectedCluster.createdAt}</Text> 
+                  >
+                    <Typography>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Title level={3} style={{ margin: 0 }}>{selectedCluster.name}</Title>
+                        <div>
+                          {(selectedCluster as any).status ? (
+                            <Button
+                              type="primary"
+                              style={{ background: "#52c41a", borderColor: "#52c41a" }}
+                            >
+                              Connected
+                            </Button>
+                          ) : (
+                            <Button type="default" danger>
+                              Disconnected
+                            </Button>
+                          )}
                         </div>
-                      </Typography>
-                    </Card>
-                  </Row>
-              </Col>  
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
+                        <Text>Cluster ID: {selectedCluster.id}</Text>
+                        <Text>Creation Date: {selectedCluster.created_at}</Text>
+                      </div>
+                    </Typography>
+                  </Card>
+                </Row>
+              </Col>
             </>
           )}
-          {clusters.filter((item) => selectedCluster == null || (item._id !== selectedCluster?._id)).length > 0 && (
+          {clusters.filter((item) => selectedCluster == null || (item.id !== selectedCluster?.id)).length > 0 && (
             <>
               <Divider>All Clusters</Divider>
               <Col>
                 {clusters.length > 0 ? 
-                clusters.filter((item) => selectedCluster == null || (item._id !== selectedCluster?._id)).map((cluster, index) => (
-                  <Row key={index}>
+                clusters.filter((item) => selectedCluster == null || (item.id !== selectedCluster?.id)).map((cluster) => (
+                  <Row key={cluster.id}>
                     <Card hoverable style={{width: "100%", marginBottom: "20px", border: "1px solid gray"}}
                     >
                       <Typography>
@@ -175,11 +213,24 @@ export default function Clusters() {
                           Select
                         </Button>
                         </div>
-                        <div style={{display: "flex", justifyContent: "space-between"}}>
-                          <Text>
-                            Cluster ID: {cluster._id}
-                          </Text>
-                          <Text>Creation Date: {cluster.createdAt}</Text> 
+                        <div style={{display: "flex", justifyContent: "space-between", alignItems: 'center'}}>
+                          <div>
+                            <Text>Cluster ID: {cluster.id}</Text>
+                            <div style={{marginTop: 4}}>
+                              <Text type="secondary">Creation Date: {cluster.created_at}</Text>
+                            </div>
+                          </div>
+                          <div>
+                            { (cluster as any).status ? (
+                              <Button type="primary" style={{background: '#52c41a', borderColor: '#52c41a'}}>
+                                Connected
+                              </Button>
+                            ) : (
+                              <Button type="default" danger>
+                                Disconnected
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </Typography>
                     </Card>

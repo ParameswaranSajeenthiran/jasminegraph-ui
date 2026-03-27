@@ -1,5 +1,5 @@
 /**
-Copyright 2024 JasmineGraph Team
+Copyright 2025 JasmineGraph Team
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -12,8 +12,10 @@ limitations under the License.
  */
 
 'use client';
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react';
 import LoginForm from '@/components/auth/login-form';
+import Loading from '@/components/auth/Loading';
+import { checkBackendHealth } from '@/services/auth-service';
 import { getAllUsers } from '@/services/user-service';
 import { Alert, Button, message } from 'antd';
 import { useRouter } from 'next/navigation';
@@ -21,6 +23,26 @@ import { useRouter } from 'next/navigation';
 const Auth = () => {
   const router = useRouter();
   const [showSetupBackendAlert, setShowSetupBackendAlert] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [healthy, setHealthy] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    const pollHealth = async () => {
+      const healthy = await checkBackendHealth();
+      if (healthy) {
+        setHealthy(true);
+        setLoading(false);
+        clearInterval(interval);
+      } else {
+        setHealthy(false);
+        setLoading(true);
+      }
+    };
+    interval = setInterval(pollHealth, 4000);
+    pollHealth(); 
+    return () => clearInterval(interval);
+  }, []);
 
   const getUsers = async () => {
     try{
@@ -31,14 +53,17 @@ const Auth = () => {
     }catch(err){
       message.error("Failed to ping backend");
     }
+  };
+
+  useEffect(() => {
+    if (healthy) {
+      getUsers();
+    }
+  }, [healthy]);
+
+  if (loading || !healthy) {
+    return <Loading />;
   }
-
-  console.log("process.env.BACKEND", process.env.BACKEND);
-  console.log("process.env.NEXT", process.env.NEXT_PUBLIC_API_URL);
-
-  useEffect(()=> {
-    getUsers();
-  },[])
 
   return (
       <div style={{height: "100vh", display: "flex", alignItems: "center"}}>
@@ -54,7 +79,7 @@ const Auth = () => {
             style={{width: showSetupBackendAlert ? "60%" : "0%"}}
             action={
               <Button size="small" type="primary" onClick={() => {
-                router.push("/setup")
+                router.push("/setup");
               }}>
                 Go to Setup
               </Button>

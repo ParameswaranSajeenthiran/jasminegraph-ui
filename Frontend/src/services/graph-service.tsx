@@ -13,6 +13,7 @@ limitations under the License.
 
 'use client';
 import { IGraphDetails } from "@/types/graph-types";
+import {IKnowledgeGraph} from "@/types/graph-types";
 import {authApi} from "./axios";
 
 export async function getGraphList(): Promise<{data: IGraphDetails[]}> {
@@ -31,6 +32,103 @@ export async function getGraphList(): Promise<{data: IGraphDetails[]}> {
   } catch (err) {
     return Promise.reject();
   }
+}
+
+export async function getKGConstructionMetaData(graphId: string): Promise<{data: IKnowledgeGraph[]}> {
+    try {
+        const result = await authApi({
+            method: "get",
+            url: `/backend/graph/construct-kg-meta`,
+            params: { graphId: graphId },
+            headers: {
+                "Cluster-ID": localStorage.getItem("selectedCluster"),
+            },
+        }).then((res) => res.data.data);
+
+        return {
+            data: result,
+        };
+    } catch (err) {
+        return Promise.reject();
+    }
+}
+export async function getOnProgressKGConstructionMetaData(): Promise<{data: IKnowledgeGraph[]}> {
+    try {
+        const result = await authApi({
+            method: "get",
+            url: `/backend/graph/construct-kg-meta/progress`,
+
+            headers: {
+                "Cluster-ID": localStorage.getItem("selectedCluster"),
+            },
+        }).then((res) => res.data.data);
+
+        return {
+            data: result,
+        };
+    } catch (err) {
+        return Promise.reject();
+    }
+}
+
+export async function constructKG(
+    hdfsIp: string,
+    hdfsPort: string,
+    hdfsFilePath: string,
+    llmRunnerString: string,
+    inferenceEngine: string,
+    model: string,
+    chunkSize: number,
+    status: string | undefined,
+    graphId: string| undefined
+): Promise<{ data: IGraphDetails[] }> {
+    try {
+        console.log("selected cluster",localStorage.getItem("selectedCluster"))
+        const result = await authApi({
+            method: "post",
+            url: `/backend/graph/hadoop/construct-kg`,
+            headers: {
+                "Cluster-ID": localStorage.getItem("selectedCluster"),
+            },
+            data: {
+                hdfsIp,
+                hdfsPort,
+                hdfsFilePath,
+                llmRunnerString,
+                inferenceEngine,
+                model,
+                chunkSize,
+                status,
+                graphId
+            },
+        }).then((res) => res.data);
+
+        return result;
+    } catch (err) {
+        return Promise.reject(err);
+    }
+}
+
+export async function stopConstructKG(
+
+    graphId: string,
+    status: string | undefined,
+): Promise<{ data: IGraphDetails[] }> {
+    try {
+        const result = await authApi({
+            method: "post",
+            url: `/backend/graph/hadoop/stop-construct-kg`,
+            data: {
+                graphId,
+                status
+
+            },
+        }).then((res) => res.data);
+
+        return result;
+    } catch (err) {
+        return Promise.reject(err);
+    }
 }
 
 export async function deleteGraph(id: string) {

@@ -20,6 +20,7 @@ interface ApiResponse<T> {
 }
 
 interface ApiErrorResponse {
+  errorCode: string;
   message: string;
 }
 
@@ -45,20 +46,20 @@ export async function addNewCluster(name: string, description: string, host: str
     };
   } catch (err: any) {
     if (err.response) {
-      return {
-        message: err.response.data.message,
-      };
+      const errorCode = err.response.data.errorCode;
+      const errorMessage = err.response.data.message;
+      return { errorCode: errorCode, message: errorMessage };
     } else {
       return Promise.reject(err);
     }
   }
 }
 
-export async function getAllClusters(userID: string, token: string) {
+export async function getAllClusters(token: string) {
   try {
     const result = await authApi({
       method: "get",
-      url: `/backend/clusters/myClusters/${userID}`,
+      url: `/backend/clusters/myClusters`,
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
@@ -81,6 +82,22 @@ export async function getCluster(clusterID: string) {
     return {
       data: result.data,
     };
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+export async function getClustersStatusByIds(token: string, ids: number[]) {
+  try {
+    const result = await authApi({
+      method: "post",
+      url: `/backend/clusters/status`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      data: { ids },
+    }).then(res => res.data);
+    return result;
   } catch (err) {
     return Promise.reject(err);
   }

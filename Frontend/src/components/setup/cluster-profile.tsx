@@ -17,6 +17,7 @@ import {
   Button,
   Form,
   Input,
+  message,
 } from 'antd';
 import { addNewCluster } from '@/services/cluster-service';
 import useAccessToken from '@/hooks/useAccessToken';
@@ -45,12 +46,18 @@ const ClusterSetup = ({onSuccess}:props) => {
 
   const onFinish = async (values: any) => {
     setLoading(true);
-    try{
+    try {
       const token = getSrvAccessToken() || "";
-      await addNewCluster(values.name, values.description, values.host, values.port, token);
-      onSuccess();
-    }catch(err){
-      console.log(err);
+      const response = await addNewCluster(values.name, values.description, values.host, values.port, token);
+      if ('errorCode' in response) {
+        message.error(response.message);
+      } else {
+        onSuccess();
+        form.resetFields();
+      }
+    } catch (err) {
+      console.error("An unexpected error occurred:", err);
+      message.error("An unexpected error occurred while adding the cluster.");
     }
     setLoading(false);
   };

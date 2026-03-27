@@ -39,10 +39,11 @@ const UserProvider = ({ children }: { children: React.ReactNode }) => {
       const res = await getUserDataByToken(token!).then((res) => res.data);
       const userData: IUserAccessData = {
         email: res.data.email,
-        fullName: res.data.fullName,
+        firstName: res.data.firstName,
+        lastName: res.data.lastName,
         role: res.data.role,
         enabled: res.data.enabled,
-        _id: res.data._id,
+        id: res.data.id,
       }
       dispatch(set_User_Data(userData));
     } catch (error) {

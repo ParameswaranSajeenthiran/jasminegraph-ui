@@ -12,15 +12,15 @@ limitations under the License.
  */
 
 export interface IClusterDetails {
-  _id: string;
+  id: number;
   name: string;
   description: string;
   host: string;
   port: number;
-  userIDs: string[];
-  clusterOwner: string;
-  createdAt: string;
-  updatedAt: string;
+  user_ids: string[];
+  cluster_owner: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IClusterProperties {

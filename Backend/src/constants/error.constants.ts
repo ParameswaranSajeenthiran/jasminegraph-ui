@@ -15,6 +15,7 @@ export const ErrorCode = {
   NoResponseFromServer: 'j-001',
   ServerError: 'j-002',
   ClusterNotFound: 'j-003',
+  UniqueViolation: '23505',
 };
 
 export const ErrorMsg = {

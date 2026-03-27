@@ -1,238 +1,444 @@
 /**
-Copyright 2025 JasmineGraph Team
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+ Copyright 2025 JasmineGraph Team
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
  */
+"use client";
 
-import { Button, Card, message, Progress, Spin } from 'antd';
-import React, { useEffect, useRef, useState } from 'react';
-import { DataSet, Network } from 'vis-network/standalone';
-import { LeftOutlined, LoadingOutlined } from '@ant-design/icons';
-import 'vis-network/styles/vis-network.css';
-import { Descriptions } from 'antd';
-import type { DescriptionsProps } from 'antd';
-import { useAppSelector } from '@/redux/hook';
+import {Button, Card, Progress, Spin, Descriptions} from "antd";
+import React, {useEffect, useRef, useState} from "react";
+import {LeftOutlined, LoadingOutlined} from "@ant-design/icons";
+import {useAppSelector} from "@/redux/hook";
+import randomColor from "randomcolor";
+import Graph from "graphology";
+import Sigma from "sigma";
+import FA2 from "graphology-layout-forceatlas2";
 
-export const ERROR_MSG = {
-  noData: "No valid low-level graph data available for partition",
-  failedMsg: "Failed to load low-level graph data."
-}
-export type INode = {
-  id: number;
-  label: string;
-  shape: string;
-  color: string;
-  size?: number;
-};
-
-type IEdge = {
-  from: number;
-  to: number;
-  properties?: any;
-};
-
-const networkOptions = {
-  nodes: {
-    shape: 'dot',
-    size: 60,
-    font: { size: 15 },
-    color: { border: '#2B7CE9', background: '#97C2FC' },
-  },
-  edges: {
-    color: { color: '#848484', highlight: '#848484', hover: '#848484' },
-    width: 2,
-  },
-  autoResize: true,
-};
-
-type Props = {
-  onHighLevelViewClick: () => void;
+interface Props {
+    onHighLevelViewClick: () => void,
+    totalNoOfEdges?: number | null
 }
 
-const LowLevelGraphVisualization = ({ onHighLevelViewClick }: Props) => {
-  const [loading, setLoading] = useState(false);
-  const [progressing, setProgressing] = useState(false);
-  const [percent, setPercent] = useState<number>(0);
-  const networkContainerRef = useRef<HTMLDivElement>(null);
-  const [network, setNetwork] = useState<Network | null>(null);
-  const nodesRef = useRef<any>(new DataSet([]));
-  const edgesRef = useRef<any>(new DataSet([]));
+interface INode {
+    name: any;
+    id: number;
+    label: string;
+    partitionID?: number;
+    color?: string;
+}
 
-  const [selectedNode, setSelectedNode] = useState<number[] | null>(null);
+interface IEdge {
+    type: string;
+    from: number;
+    to: number;
+    label?: string;
+}
 
-  const lowLevelGraphData = useAppSelector((state) => state.queryData.visualizeData);
+const LowLevelGraphVisualization = ({ onHighLevelViewClick, totalNoOfEdges}: Props) => {
+    const [loading, setLoading] = useState(true);
+    const [progress, setProgress] = useState(0);
+    const [count, setCount] = useState(0);
 
-  const loadLowLevelView = async () => {
-    try {
-      setLoading(true);
-      nodesRef.current.clear();
-      edgesRef.current.clear();
+    const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+    const [hoveredNode, setHoveredNode] = useState<any | null>(null);
+    const [hoveredEdge, setHoveredEdge] = useState<any | null>(null);
+    const [retrievedAt, setRetrievedAt] = useState<string | null>(null);
 
-      if (lowLevelGraphData && lowLevelGraphData.node && Array.isArray(lowLevelGraphData.edge)) {
-        const { node, edge } = lowLevelGraphData;
+    const containerRef = useRef<HTMLDivElement>(null);
+    const graphRef = useRef<any>(null);
+    const rendererRef = useRef<any>(null);
+    const partitionColorMap = useRef<Map<number, string>>(new Map());
 
-        // Validate node format
-        const validatedNodes = node.map((node: INode) => {
-          return {
-            ...node,
-            id: node.id,
-            label: node.label,
-            shape: 'dot',
-            color: '#97C2FC',
-            size: 30,
+    const lowLevelGraphData = useAppSelector((state) => state.queryData.visualizeData);
+    const isRender = useAppSelector((state) => state.queryData.visualizeData.render);
+    const updateProgress = useAppSelector((state) => state.queryData.visualizeData.updateProgress);
+
+    const getColor = (partitionID: number) => {
+        if (!partitionColorMap.current.has(partitionID)) {
+            partitionColorMap.current.set(partitionID, randomColor({luminosity: "bright"}));
+        }
+        return partitionColorMap.current.get(partitionID)!;
+    };
+
+    const handleSearch = (query: string) => {
+        if (!query || query == "" || !graphRef.current || !rendererRef.current) return;
+
+        const graph = graphRef.current;
+        const renderer = rendererRef.current;
+        const camera = renderer.getCamera();
+        const lowerQuery = query.toLowerCase();
+
+        const matchedNodes: string[] = [];
+
+        // Search by ID and attributes
+        graph.forEachNode((node: string, attrs: any) => {
+            if (node.toString().includes(lowerQuery)) {
+                matchedNodes.push(node);
+            } else {
+                for (const key in attrs) {
+                    const value = attrs[key];
+                    if (value != null && String(value).toLowerCase().includes(lowerQuery)) {
+                        matchedNodes.push(node);
+                        break;
+                    }
+                }
             }
         });
 
-        // Validate edge format
-        const validatedEdges = edge.map((edge: IEdge) => {
-          const isValid = edge.from !== undefined && edge.to !== undefined;
-          if (!isValid) {
-            console.warn('Invalid edge:', edge);
-          }
-          return { ...edge };
+        if (matchedNodes.length === 0) return;
+
+        // Reset all highlights
+        graph.forEachNode((node: string) => graph.setNodeAttribute(node, "highlighted", false));
+        graph.forEachEdge((edge: string) => graph.setEdgeAttribute(edge, "highlighted", false));
+
+        // Highlight matched nodes
+        matchedNodes.forEach((node) => graph.setNodeAttribute(node, "highlighted", true));
+
+        // Highlight edges connecting matched nodes
+        graph.forEachEdge((edge: string, attr: any, source: string, target: string) => {
+            if (matchedNodes.includes(source) && matchedNodes.includes(target)) {
+                graph.setEdgeAttribute(edge, "highlighted", true);
+            }
         });
 
-        if (validatedNodes.length === 0) {
-          message.warning('No valid nodes found for low-level view.');
+        // Optionally zoom to fit all matched nodes
+        const positions = matchedNodes.map((node) => renderer.getNodeDisplayData(node)).filter(Boolean);
+        if (positions.length > 0) {
+            const xValues = positions.map((p) => p!.x);
+            const yValues = positions.map((p) => p!.y);
+            const minX = Math.min(...xValues);
+            const maxX = Math.max(...xValues);
+            const minY = Math.min(...yValues);
+            const maxY = Math.max(...yValues);
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const ratio = Math.max(maxX - minX, maxY - minY) / 400 + 0.1; // adjust zoom factor
+            camera.animate({x: centerX, y: centerY, ratio}, {duration: 700, easing: "linear"});
         }
-
-        edgesRef.current.add(validatedEdges);
-        nodesRef.current.add(validatedNodes);
-
-        if (network) {
-          network.setData({ nodes: nodesRef.current, edges: edgesRef.current });
-          network.fit(); // Ensure the view is adjusted
-        }
-      } else {
-        console.warn(ERROR_MSG.noData, selectedNode);
-        message.warning(ERROR_MSG.noData);
-      }
-
-      setLoading(false);
-    } catch (err) {
-      console.error(ERROR_MSG.failedMsg, err);
-      message.error(ERROR_MSG.failedMsg);
-      setLoading(false);
-    }
-  };
-
-  const onViewGraph = async () => {
-    if(nodesRef.current){
-      nodesRef.current.clear();
-    }
-    if(edgesRef.current){
-      edgesRef.current.clear();
-    }
-    await loadLowLevelView();
-  };
-
-  useEffect(() => {
-    onViewGraph();
-  }, [lowLevelGraphData]);
-
-  useEffect(() => {
-    if (!networkContainerRef.current) {
-      console.error('Network container ref is not assigned');
-      return;
-    }
-
-    const network = new Network(networkContainerRef.current, { nodes: nodesRef.current, edges: edgesRef.current }, networkOptions);
-
-    network.on('selectNode', (params) => {
-      setSelectedNode(params.nodes)
-    });
-
-    // Event listener for edge selection
-    network.on('selectEdge', (params) => {
-      const selectedEdges = params.edges;
-      console.log('Selected Edges:', selectedEdges);
-    });
-
-    // Event listener for edge deselection
-    network.on('deselectNode', (params) => {
-      setSelectedNode(params.nodes);
-    });
-
-    setNetwork(network);
-
-    return () => {
-      network.destroy();
     };
-  }, []);
 
-  const getDetails = () => {
-    const node = lowLevelGraphData.node.find((node: any) => selectedNode && node.id == selectedNode[0]);
-    const keys = Object.keys(node);
 
-    console.log("NODE DETAILS", node, keys);
+    // Initialize Sigma once
+    useEffect(() => {
+        const initGraph = async () => {
+            if (typeof window === "undefined" || !containerRef.current) return;
+            setRetrievedAt(new Date().toLocaleString());
+            // setLoading(true);
+            const graph = new Graph({multi: true, type: "directed"});
+            graphRef.current = graph;
 
-    let items: DescriptionsProps['items'];
-    
-    if (node && node.id) {
-      items = keys.map((key, index) => ({
-        key: `${index + 1}`,
-        label: key,
-        children: `${node[key]}`,
-      }));
-    } else {
-      items = [];
-    }
-    
-    return items;
-  }
+            const renderer = new Sigma(graph, containerRef.current, {renderLabels: true, renderEdgeLabels: true});
+            rendererRef.current = renderer;
 
-  return (
-    <div>
-      <Spin spinning={loading} indicator={<LoadingOutlined spin />} fullscreen />
-      <div 
-        style={{
-          position: 'relative',
-          border: '1px solid red',
-          height: '600px',
-          aspectRatio: "16/9"
-        }}
-      >
-        <div
-          ref={networkContainerRef}
-          style={{
-            // width: '100%',
-            height: '600px',
-            border: '1px solid lightgray',
-            backgroundColor: '#ffffff',
-            aspectRatio: "16/9"
-          }}
-        />
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px'
-        }}>
-          {selectedNode && selectedNode?.length > 0 && (
-            <Card 
-              style={{ maxWidth: 300 }}
+            // Click selects node
+            renderer.on("clickNode", ({node}) => setSelectedNodeId(Number(node)));
+
+            // --- HOVER TOOLTIP EVENTS ---
+            renderer.on("enterNode", ({node}) => {
+                const attrs = graph.getNodeAttributes(node);
+                setHoveredNode({id: node, ...attrs});
+                const neighbors = new Set(graph.neighbors(node));
+
+                graph.forEachNode((n) => {
+                    graph.setNodeAttribute(
+                        n,
+                        "highlighted",
+                        n === node || neighbors.has(n)
+                    );
+                });
+            });
+
+            renderer.on("leaveNode", () => {
+                setHoveredNode(null);
+            });
+
+            renderer.on("enterEdge", ({edge}) => {
+                const attrs = graph.getEdgeAttributes(edge);
+                setHoveredEdge({id: edge, ...attrs});
+            });
+
+
+
+            renderer.on("leaveEdge", () => {
+                setHoveredEdge(null);
+            });
+            // setLoading(true)
+            // let count = 0;
+            // if(totalNoOfEdges){
+            //     while(count < totalNoOfEdges){
+            //         console.log( "count", count);
+            //         count = lowLevelGraphData.edge.length;
+            //         setProgress(Math.round((count / totalNoOfEdges) * 100));
+            //         count++;
+            //     }
+            // }
+
+
+        };
+
+        initGraph();
+    }, []);
+
+    useEffect(() => {
+
+        if(totalNoOfEdges){
+                console.log( "count", lowLevelGraphData.edge.length);
+                // ;
+                setProgress(Math.round((lowLevelGraphData.edge.length / totalNoOfEdges) * 100));
+                // count++;
+
+
+        }
+    }, [updateProgress]);
+    // Incremental updates
+    useEffect(() => {
+        const updateGraph = async () => {
+            if (!graphRef.current || !lowLevelGraphData) return;
+
+
+            const graph = graphRef.current;
+            const nodes: INode[] = lowLevelGraphData.node || [];
+            const edges: IEdge[] = lowLevelGraphData.edge || [];
+
+            const total = nodes.length + edges.length;
+            let count = 0;
+
+            // Add nodes
+            nodes.forEach((n) => {
+                if (!graph.hasNode(n.id)) {
+                    graph.addNode(n.id, {
+                        ...n,
+                        category: n.label,
+                        label: n.name,
+                        size: 3,
+                        color: n.color ?? getColor(n.partitionID ?? 0),
+                        x: (Math.random() - 0.5) * 20,
+                        y: (Math.random() - 0.5) * 20,
+                    });
+                }
+                count++;
+                // setProgress(Math.round((count / total) * 100));
+            });
+
+            // Add edges
+            edges.forEach((e) => {
+                if (
+                    graph.hasNode(e.from) &&
+                    graph.hasNode(e.to) &&
+                    !graph.hasEdge(e.from, e.to)
+                ) {
+                    graph.addEdge(e.from, e.to, {
+                        ...e,              // <-- add ALL properties of the edge
+                        from: e.from,      // ensure consistent ID
+                        to: e.to,
+                        label: e.label ?? "test",
+                    });
+                }
+
+                count++;
+                // setProgress(Math.round((count / total) * 100));
+            });
+
+            // Degree-based node sizing
+            graph.forEachNode((node: string, attr: any) => {
+                const degree = graph.degree(node);
+                graph.setNodeAttribute(node, "size", Math.log(degree + 1) * 2 + 2);
+            });
+
+
+            // Light layout smoothing
+            FA2.assign(graph, {iterations: 200, settings: {gravity: 5}});
+            console.log("progress",progress);
+            if (isRender) {
+                setLoading(false);
+            }
+            // setLoading(false);
+        };
+
+        updateGraph();
+    }, [isRender]);
+
+    const getNodeDetails = () => {
+        if (!selectedNodeId) return [];
+        const node = lowLevelGraphData.node.find((n: any) => n.id === selectedNodeId);
+        if (!node) return [];
+        return Object.keys(node).map((k, i) => ({
+            key: i.toString(),
+            label: k,
+            children: String(node[k]),
+        }));
+    };
+
+    return (
+        <div style={{width: "100%", height: "100%"}}>
+
+            <div
+                style={{
+                    position: "relative",
+                    width: "150%",
+                    maxWidth: "1400px",
+                    height: "calc(100vh - 150px)",
+                    margin: "0 auto",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "12px",
+                    background: "#fff",
+                    overflow: "hidden",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+                }}
             >
-              <Descriptions column={1} title={`Node ${selectedNode}`}  items={getDetails()} />
-            </Card>
-          )}
+                {/* Search bar */}
+                <div
+                    style={{
+                        position: "absolute",
+                        top: 16,
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        zIndex: 20,
+                        width: 300,
+                    }}
+                >
+                    <input
+                        type="text"
+                        placeholder="Search node by ID or label..."
+                        onChange={(e) => handleSearch(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            borderRadius: 8,
+                            border: "1px solid #ccc",
+                            fontSize: 14,
+                        }}
+                    />
+                </div>
+
+                <div ref={containerRef} style={{width: "100%", height: "100%"}}>
+                    {loading && (
+                        <div
+                            style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                width: "100%",
+                                height: "100%",
+                                background: "rgba(255, 255, 255, 0.7)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                zIndex: 1000,
+                                flexDirection: "column",
+                            }}
+                        >
+                            <Spin size="large" tip={`Loading... ${progress}%`}/>
+                            <div style={{marginTop: 12}}>
+                                <Progress
+                                    percent={progress}
+                                    showInfo
+                                    strokeColor={{from: "#108ee9", to: "#87d068"}}
+                                    style={{width: 200}}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Hover Tooltip */}
+                {hoveredNode && (
+                    <div style={{position: "absolute", top: 16, right: 16, zIndex: 10}}>
+                        <Card
+                            size="small"
+                            style={{maxWidth: 320, borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.15)"}}
+                        >
+                            <div><b>ID:</b> {hoveredNode.id}</div>
+
+
+                            {Object.entries(hoveredNode).map(([key, value]) =>
+                                key !== "id" && key !== "label" && key !== "x" && key !== "y" && key !== "color" && key !== "size" ? (
+                                    <div key={key}>
+                                        <b>{key}:</b> {String(value)}
+                                    </div>
+                                ) : null
+                            )}
+                        </Card>
+                    </div>
+                )}
+                {hoveredEdge && (
+                    <div style={{position: "absolute", top: 16, right: 16, zIndex: 10}}>
+                        <Card
+                            size="small"
+                            style={{maxWidth: 320, borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.15)"}}
+                        >
+                            <div><b>Edge:</b> {hoveredEdge.id}</div>
+                            {Object.entries(hoveredEdge).map(([k, v]) => (
+                                <div key={k}><b>{k}:</b> {String(v)}</div>
+                            ))}
+                        </Card>
+                    </div>
+                )}
+
+                {/* Node details panel */}
+                {selectedNodeId && (
+                    <div style={{position: "absolute", top: 16, right: 16, zIndex: 10}}>
+                        <Card
+                            size="small"
+                            style={{maxWidth: 320, borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.15)"}}
+                        >
+                            <Descriptions column={1} title={`Node ${selectedNodeId}`} items={getNodeDetails()}/>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Back button */}
+                <div style={{position: "absolute", top: 16, left: 16, zIndex: 10}}>
+                    <Button
+                        type="primary"
+                        icon={<LeftOutlined/>}
+                        size="large"
+                        shape="circle"
+                        onClick={onHighLevelViewClick}
+                    />
+                </div>
+                {retrievedAt && (
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: 16,
+                            right: 16,
+                            zIndex: 15,
+                            background: "#ffffffcc",
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            fontSize: 12,
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                        }}
+                    >
+
+                        {retrievedAt}
+                    </div>
+                )}
+            </div>
+
+
+            {/* Progress bar */}
+            {/*{loading && (*/}
+            {/*    <div style={{marginTop: 12, maxWidth: "1400px", marginInline: "auto"}}>*/}
+            {/*        <Progress*/}
+            {/*            percent={progress}*/}
+            {/*            showInfo={false}*/}
+            {/*            strokeColor={{from: "#108ee9", to: "#87d068"}}*/}
+            {/*        />*/}
+            {/*    </div>*/}
+            {/*)}*/}
+
         </div>
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          left: '10px'
-        }}>
-          <Button type="primary" icon={<LeftOutlined />} size={'large'} onClick={onHighLevelViewClick} />
-        </div>
-      </div>
-      {progressing && <Progress percent={percent} showInfo={false} />}
-    </div>
-  );
+
+    );
 };
 
 export default LowLevelGraphVisualization;

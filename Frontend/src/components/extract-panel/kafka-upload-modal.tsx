@@ -11,21 +11,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+'use client';
+import React from 'react';
+import { Modal } from 'antd';
 
-const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    const token = req.header('Authorization')?.split(' ')[1];
-    if (!token) {
-        return res.status(401).send('Access denied');
-    }
-    try {
-        const decoded = jwt.verify(token, 'access_token_secret');
-        req.body = { ...req.body, ...decoded };
-        next();
-    } catch (err) {
-        res.status(400).send('Authentication Failed');
-    }
+type Props = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}
+
+const KafkaUploadModal = ({open, setOpen}:Props) => {
+  const handleOk = () => {  
+    setOpen(false);
+  };
+
+  const handleCancel = () => {
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <Modal title="Apache Kafka" open={open} onOk={handleOk} onCancel={handleCancel}>
+        <p>Not Implemented</p>
+      </Modal>
+    </>
+  );
 };
 
-export default authMiddleware;
+export default KafkaUploadModal;

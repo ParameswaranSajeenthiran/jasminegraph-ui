@@ -26,46 +26,76 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      mongoCont:
+      postgres:
         condition: service_healthy
     volumes:
       - /var/tmp/jasminegraph-ui-backend:/app/caches
     environment:
-      - MONGO_URL=mongodb://mongoCont:27017/jasminegraph  
+      - POSTGRES_URL=postgresql://admin:admin_password@postgres:5432/jasminegraphdb
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/health"]
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/health" ]
       interval: 5s
       timeout: 3s
       retries: 5
       start_period: 15s
 
-  # MongoDB Service
-  mongoCont:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
+  # Postgres Service (shared by backend + keycloak)
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: jasminegraphdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password
     volumes:
-      - ./mongodb-data:/data/db
+      - postgres-data:/var/lib/postgresql/data
+      - ./Backend/src/db-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d jasminegraphdb"]
       interval: 5s
       timeout: 3s
       retries: 5
       start_period: 10s
+    ports:
+      - "5432:5432"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.1
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KC_DB=postgres
+      - KC_DB_URL_HOST=postgres
+      - KC_DB_URL_DATABASE=jasminegraphdb
+      - KC_DB_USERNAME=admin
+      - KC_DB_PASSWORD=admin_password
+      - KC_HTTP_ENABLED=true
+      - KC_IMPORT=/opt/keycloak/data/import/jasminegraph-realm.json
+    command: start-dev --import-realm
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./Keycloak/jasminegraph-realm.json:/opt/keycloak/data/import/jasminegraph-realm.json
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # Playwright Test Service
   playwright:
     build:
       context: ./tests
       dockerfile: Dockerfile
+    working_dir: /app
     depends_on:
       backend:
         condition: service_healthy
       frontend:
         condition: service_healthy
     environment:
-      - BASE_URL=http://frontend:3000   
+      - BASE_URL=http://frontend:3000
+      - KEYCLOAK_BASE_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=jasminegraph
+      - BACKEND_URL=http://backend:8080
 
 volumes:
-  mongodb-data:
+  postgres-data:
     driver: local

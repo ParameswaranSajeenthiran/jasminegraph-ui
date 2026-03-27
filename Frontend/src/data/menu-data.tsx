@@ -53,6 +53,11 @@ export const GraphPanelMenu: MenuItem[] = [
     key: Routes.GRAPH_PANEL_ROUTES.upload,
     icon: <ContainerOutlined />,
   },
+    {
+        label: 'Extract',
+        key: Routes.GRAPH_PANEL_ROUTES.extract,
+        icon: <ContainerOutlined />,
+    },
   {
     label: 'Graph',
     key: Routes.GRAPH_PANEL_ROUTES.graph,
@@ -71,6 +76,11 @@ export const QueryInterfaceMenu: MenuItem[] = [
     key: Routes.QUERY_PANEL_ROUTES.query,
     icon: <ContainerOutlined />,
   },
+    {
+        label: 'Semantic Beam Search',
+        key: Routes.QUERY_PANEL_ROUTES.semantic_beam_search,
+        icon: <ContainerOutlined />,
+    },
   {
     label: 'Graph Properties',
     key: Routes.QUERY_PANEL_ROUTES.properties,
